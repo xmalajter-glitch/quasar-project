@@ -19,10 +19,10 @@
     </div>
 
     <!-- Fixný príkazový riadok na spodku -->
-    <div class="q-pa-sm bg-grey-2 border-top">
+    <div class="q-pa-sm border-top">
       <!-- Informácia o tom, kto práve píše (Live preview) -->
-      <div v-if="typingUser" class="text-caption text-grey-7 q-mb-xs q-px-sm">
-        <q-icon name="edit" /> <em>{{ typingUser }} is typing...</em> 
+      <div v-if="typingUser" class="text-caption q-mb-xs q-px-sm">
+        <q-icon name="edit" /> <em>{{ typingUser }} is typing...</em>
         <span class="text-primary cursor-pointer q-ml-sm" @click="showLiveText = true">(Zobraziť live text)</span>
       </div>
 
@@ -30,7 +30,6 @@
         v-model="newMessage"
         outlined
         dense
-        bg-color="white"
         placeholder="Napíšte správu alebo použite príkaz (napr. /join, /kick, /list, @nickname)..."
         @keyup.enter="sendMessage"
         @update:model-value="simulateTyping"
@@ -96,7 +95,7 @@ function sendMessage() {
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     isMention: isMention // Tu priradíme vypočítanú premennú
   })
-  
+
   newMessage.value = ''
   scrollToBottom()
 }
