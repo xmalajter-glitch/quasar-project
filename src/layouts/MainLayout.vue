@@ -1,10 +1,13 @@
 <template>
+  <CreateChannelDialog
+    v-model="createDialog"
+  />
   <q-layout view="hHh LpR fFf">
     <!-- HLAVIČKA -->
     <q-header elevated class="bg-primary text-white">
       <q-toolbar>
         <q-btn dense flat round icon="menu" @click="toggleLeftDrawer" />
-        
+
         <q-toolbar-title>
           <q-icon name="tag" v-if="currentChannel.type === 'public'" />
           <q-icon name="lock" v-else />
@@ -12,20 +15,26 @@
         </q-toolbar-title>
 
         <!-- Prepínač stavu používateľa -->
-        <q-btn flat no-caps icon="account_circle" :label="currentUser.nick">
+        <q-btn flat no-caps icon="account_circle" :label="currentUser.nick" style="margin-right: 4px" >
           <q-badge floating :color="statusColor" rounded />
           <q-menu>
             <q-list style="min-width: 150px">
               <q-item clickable v-close-popup @click="setStatus('online')">
-                <q-item-section avatar><q-icon color="positive" name="fiber_manual_record" /></q-item-section>
+                <q-item-section avatar
+                  ><q-icon color="positive" name="fiber_manual_record"
+                /></q-item-section>
                 <q-item-section>Online</q-item-section>
               </q-item>
               <q-item clickable v-close-popup @click="setStatus('dnd')">
-                <q-item-section avatar><q-icon color="negative" name="remove_circle" /></q-item-section>
+                <q-item-section avatar
+                  ><q-icon color="negative" name="remove_circle"
+                /></q-item-section>
                 <q-item-section>Do Not Disturb</q-item-section>
               </q-item>
               <q-item clickable v-close-popup @click="setStatus('offline')">
-                <q-item-section avatar><q-icon color="grey" name="radio_button_unchecked" /></q-item-section>
+                <q-item-section avatar
+                  ><q-icon color="grey" name="radio_button_unchecked"
+                /></q-item-section>
                 <q-item-section>Offline</q-item-section>
               </q-item>
               <q-separator />
@@ -47,25 +56,33 @@
     <!-- ĽAVÝ PANEL: Zoznam kanálov -->
     <q-drawer show-if-above v-model="leftDrawerOpen" side="left" bordered :width="250">
       <q-list>
-        <q-item-label header>Kanály</q-item-label>
-        
+        <q-item>
+          <q-item-section>
+            <q-item-label header class="q-pa-none">Kanály</q-item-label>
+          </q-item-section>
+          <q-item-section side>
+            <q-btn flat round dense icon="add" @click="createDialog = !createDialog" >
+              <q-tooltip>Nový kanál</q-tooltip>
+            </q-btn>
+          </q-item-section>
+        </q-item>
         <!-- Vykreslenie kanálov -->
-        <q-item 
-          v-for="channel in channels" 
+        <q-item
+          v-for="channel in channels"
           :key="channel.name"
-          clickable 
+          clickable
           v-ripple
           :active="currentChannel.name === channel.name"
           active-class="bg-blue-1 text-primary text-bold"
           @click="currentChannel = channel"
         >
-          <q-item-section avatar style="min-width: 30px;">
+          <q-item-section avatar style="min-width: 30px">
             <q-icon :name="channel.type === 'public' ? 'tag' : 'lock'" size="sm" />
           </q-item-section>
           <q-item-section>
             <q-item-label>{{ channel.name }}</q-item-label>
           </q-item-section>
-          
+
           <!-- Zvýraznenie pozvánky -->
           <q-item-section side v-if="channel.isInvite">
             <q-badge color="orange" label="Pozvánka" />
@@ -89,8 +106,11 @@
             <q-item-label caption v-if="user.isAdmin">Správca</q-item-label>
           </q-item-section>
           <q-item-section side>
-            <q-icon :name="user.status === 'online' ? 'fiber_manual_record' : 'radio_button_unchecked'" 
-                    :color="user.status === 'online' ? 'positive' : 'grey'" size="xs" />
+            <q-icon
+              :name="user.status === 'online' ? 'fiber_manual_record' : 'radio_button_unchecked'"
+              :color="user.status === 'online' ? 'positive' : 'grey'"
+              size="xs"
+            />
           </q-item-section>
         </q-item>
       </q-list>
@@ -105,14 +125,15 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import CreateChannelDialog from '@/components/CreateChannelDialog.vue'
 
 const leftDrawerOpen = ref(false)
 const rightDrawerOpen = ref(false)
 
-function toggleLeftDrawer () {
+function toggleLeftDrawer() {
   leftDrawerOpen.value = !leftDrawerOpen.value
 }
-function toggleRightDrawer () {
+function toggleRightDrawer() {
   rightDrawerOpen.value = !rightDrawerOpen.value
 }
 
@@ -134,7 +155,7 @@ const channels = ref([
   { name: 'general', type: 'public', isInvite: false },
   { name: 'oznamy', type: 'public', isInvite: false },
   { name: 'tajny-projekt', type: 'private', isInvite: true }, // Topovaný/zvýraznený kanál
-  { name: 'dev-team', type: 'private', isInvite: false }
+  { name: 'dev-team', type: 'private', isInvite: false },
 ])
 
 const currentChannel = ref(channels.value[0])
@@ -143,6 +164,9 @@ const channelUsers = ref([
   { nick: 'FeroMaster', status: 'online', isAdmin: false },
   { nick: 'JanoAdmin', status: 'online', isAdmin: true },
   { nick: 'ZuzkaDND', status: 'dnd', isAdmin: false },
-  { nick: 'MisoOffline', status: 'offline', isAdmin: false }
+  { nick: 'MisoOffline', status: 'offline', isAdmin: false },
 ])
+
+const createDialog = ref(false)
+
 </script>
