@@ -8,7 +8,7 @@
       </q-card-section>
       <q-card-actions align="right">
         <q-btn label="Cancel" v-close-popup />
-        <q-btn label="Create" color="primary" :disable="!canCreate" />
+        <q-btn label="Create" color="primary" :disable="!canCreate" @click="createChannel" />
       </q-card-actions>
     </q-card>
   </q-dialog>
@@ -18,9 +18,22 @@
 import { ref, computed } from 'vue'
 
 const open = defineModel({ type: Boolean, default: false })
+const emit = defineEmits(['create'])
 
 const name = ref('')
 const isPrivate = ref(false)
+
+function createChannel() {
+  if (!canCreate.value) return
+
+  const channel = {
+    name: name.value.trim(),
+    isPrivate: isPrivate.value,
+  }
+
+  emit('create', channel)
+  open.value = false
+}
 
 const canCreate = computed(() => {
   const trimmed = name.value.trim()
