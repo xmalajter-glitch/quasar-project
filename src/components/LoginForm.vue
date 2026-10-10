@@ -1,26 +1,53 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref} from 'vue'
+import { useRouter } from 'vue-router'
 
-const email = ref(null);
-const password = ref(null);
+const router = useRouter()
 
-const showPassword = ref(false);
+const email = ref(null)
+const password = ref(null)
+
+const showPassword = ref(false)
+
+const emailRules = [(val) => !!val || 'Email is required']
+const passwordRules = [(val) => !!val || 'Password is required']
+
+const onSubmit = () => {
+  document.cookie = 'auth_session=simulated; path=/; max-age=3600; SameSite=Lax'
+  router.push({ name: 'home' })
+}
+
 </script>
 
 <template>
   <q-form
     autocorrect="off"
     autocapitalize="off"
-    autocomplete="off"
     spellcheck="false"
-    class="q-gutter-y-md form"
+    novalidate
+    class="q-gutter-y-sm form"
+    @submit.prevent="onSubmit"
   >
-    <q-input outlined type="text" label="email*" v-model="email"></q-input>
+    <q-input
+      outlined
+      type="email"
+      label="Email *"
+      v-model="email"
+      :rules="emailRules"
+      lazy-rules
+      autocomplete="email"
+      hide-bottom-space
+    />
+
     <q-input
       outlined
       v-model="password"
-      label="password*"
+      label="Password *"
       :type="showPassword ? 'text' : 'password'"
+      :rules="passwordRules"
+      lazy-rules
+      autocomplete="current-password"
+      hide-bottom-space
     >
       <template #append>
         <q-icon
@@ -30,7 +57,8 @@ const showPassword = ref(false);
         />
       </template>
     </q-input>
-    <q-btn color="primary" label="Log in" class="full-width"></q-btn>
+
+    <q-btn color="primary" label="Log in" type="submit" class="full-width" />
   </q-form>
 </template>
 
