@@ -1,7 +1,5 @@
 <template>
-  <CreateChannelDialog
-    v-model="createDialog"
-  />
+  <CreateChannelDialog v-model="createDialog" @create="handleAddChannel" />
   <q-layout view="hHh LpR fFf">
     <!-- HLAVIČKA -->
     <q-header elevated class="bg-primary text-white">
@@ -15,7 +13,13 @@
         </q-toolbar-title>
 
         <!-- Prepínač stavu používateľa -->
-        <q-btn flat no-caps icon="account_circle" :label="currentUser.nick" style="margin-right: 4px" >
+        <q-btn
+          flat
+          no-caps
+          icon="account_circle"
+          :label="currentUser.nick"
+          style="margin-right: 4px"
+        >
           <q-badge floating :color="statusColor" rounded />
           <q-menu>
             <q-list style="min-width: 150px">
@@ -38,7 +42,7 @@
                 <q-item-section>Offline</q-item-section>
               </q-item>
               <q-separator />
-              <q-item clickable v-close-popup>
+              <q-item clickable v-close-popup @click="logout">
                 <q-item-section avatar><q-icon name="logout" /></q-item-section>
                 <q-item-section>Odhlásiť sa</q-item-section>
               </q-item>
@@ -61,7 +65,7 @@
             <q-item-label header class="q-pa-none">Kanály</q-item-label>
           </q-item-section>
           <q-item-section side>
-            <q-btn flat round dense icon="add" @click="createDialog = !createDialog" >
+            <q-btn flat round dense icon="add" @click="createDialog = !createDialog">
               <q-tooltip>Nový kanál</q-tooltip>
             </q-btn>
           </q-item-section>
@@ -84,7 +88,7 @@
           </q-item-section>
 
           <!-- Zvýraznenie pozvánky -->
-          <q-item-section side v-if="channel.isInvite">
+          <q-item-section side v-if="channel.isInvited">
             <q-badge color="orange" label="Pozvánka" />
           </q-item-section>
         </q-item>
@@ -125,7 +129,10 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import CreateChannelDialog from '@/components/CreateChannelDialog.vue'
+
+const router = useRouter()
 
 const leftDrawerOpen = ref(false)
 const rightDrawerOpen = ref(false)
@@ -152,10 +159,10 @@ function setStatus(status) {
 
 // Zoznam kanálov (simulácia toho, čo používateľ vidí)
 const channels = ref([
-  { name: 'general', type: 'public', isInvite: false },
-  { name: 'oznamy', type: 'public', isInvite: false },
-  { name: 'tajny-projekt', type: 'private', isInvite: true }, // Topovaný/zvýraznený kanál
-  { name: 'dev-team', type: 'private', isInvite: false },
+  { name: 'general', type: 'public', isInvited: false },
+  { name: 'oznamy', type: 'public', isInvited: false },
+  { name: 'tajny-projekt', type: 'private', isInvited: true }, // Topovaný/zvýraznený kanál
+  { name: 'dev-team', type: 'private', isInvited: false },
 ])
 
 const currentChannel = ref(channels.value[0])
@@ -168,5 +175,16 @@ const channelUsers = ref([
 ])
 
 const createDialog = ref(false)
+
+function logout() {
+  document.cookie = 'auth_session=; path=/; max-age=0; SameSite=Lax'
+  router.push({ name: 'login' })
+}
+
+function handleAddChannel(channel) {
+  channels.value.push(
+    { name: channel.name, type: channel.isPrivate ? 'private' : 'public', isInvited: false }
+  )
+}
 
 </script>
