@@ -2,7 +2,7 @@
   <q-page class="flex column" style="height: calc(100vh - 50px);">
     <div class="q-pa-md col overflow-auto" id="chat-area">
       
-      // Simulacia historie
+      <!-- Simulacia historie -->
       <div class="text-center q-mb-md">
         <q-btn outline color="primary" label="Načítať históriu (Infinite Scroll)" size="sm" />
       </div>
@@ -18,10 +18,10 @@
       />
     </div>
 
-    // Fixny riadok na pisanie
+    <!-- Fixny riadok na pisanie -->
     <div class="q-pa-sm border-top">
       
-      // Inforamcie o tom kto prave pise do daneho chatu
+      <!-- Informacie o tom kto prave pise do daneho chatu -->
       <div v-if="typingUser" class="text-caption q-mb-xs q-px-sm">
         <q-icon name="edit" /> <em>{{ typingUser }} is typing...</em>
         <span class="text-primary cursor-pointer q-ml-sm" @click="showLiveText = true">(Zobraziť live text)</span>
@@ -41,7 +41,7 @@
       </q-input>
     </div>
 
-    // Dialog pre zive sledovanie rozpisaneho textu 
+     <!-- Dialog pre zive sledovanie rozpisaneho textu -->
     <q-dialog v-model="showLiveText">
       <q-card style="min-width: 300px">
         <q-card-section>

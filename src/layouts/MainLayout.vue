@@ -3,7 +3,7 @@
   
   <q-layout view="hHh LpR fFf">
     
-    //Hlavicka
+    <!-- Hlavicka -->
     <q-header elevated class="bg-primary text-white">
       <q-toolbar>
         <q-btn dense flat round icon="menu" @click="toggleLeftDrawer" />
@@ -14,7 +14,7 @@
           {{ store.currentChannel.name }}
         </q-toolbar-title>
 
-        //Prepinanie stavu pouzivatela
+        <!-- Prepinanie stavu pouzivatela -->
         <q-btn
           flat
           no-caps
@@ -52,14 +52,14 @@
           </q-menu>
         </q-btn>
 
-        // Zobrazenie jednotlivych clenov kanala
+        <!-- Zobrazenie jednotlivych clenov kanala -->
         <q-btn dense flat round icon="people" @click="toggleRightDrawer">
           <q-tooltip>Členovia kanála (/list)</q-tooltip>
         </q-btn>
       </q-toolbar>
     </q-header>
 
-    // Zoznam kanalov
+    <!-- Zoznam kanalov -->
     <q-drawer show-if-above v-model="leftDrawerOpen" side="left" bordered :width="250">
       <q-list>
         <q-item>
@@ -73,7 +73,7 @@
           </q-item-section>
         </q-item>
         
-        // Vykreslenie kanalov
+        <!-- Vykreslenie kanalov -->
         <q-item
           v-for="channel in channels"
           :key="channel.name"
@@ -90,7 +90,7 @@
             <q-item-label>{{ channel.name }}</q-item-label>
           </q-item-section>
 
-          // Pozvanka
+          <!-- Pozvanka -->
           <q-item-section side v-if="channel.isInvited">
             <q-badge color="orange" label="Pozvánka" />
           </q-item-section>
@@ -98,7 +98,7 @@
       </q-list>
     </q-drawer>
 
-    // Zoznam pouzivatelov v danom kanali
+    <!-- Zoznam pouzivatelov v danom kanali -->
     <q-drawer v-model="rightDrawerOpen" side="right" bordered :width="250">
       <q-list>
         <q-item-label header>Členovia (#{{ store.currentChannel.name }})</q-item-label>
@@ -123,7 +123,7 @@
       </q-list>
     </q-drawer>
 
-    // Hlavny obsah, prichadza zo store.js
+    <!-- Hlavny obsah, prichadza zo store.js -->
     <q-page-container>
       <router-view />
     </q-page-container>
