@@ -1,10 +1,10 @@
 import { reactive } from 'vue'
 
-// Toto je náš centrálny stav aplikácie
+// Centralny store pre spravu stavu aplikacie
 export const store = reactive({
-  currentChannel: { name: 'general', type: 'public' }, // Predvolený kanál
+  currentChannel: { name: 'general', type: 'public' }, // Predvoleny kanal
   
-  // Zoznam správ pre jednotlivé kanály
+  // Zoznam sprav pre jednotlive kanaly
   messages: {
     'general': [
       { id: 1, sender: 'JanoAdmin', text: 'Vitajte v kanáli general!', time: '10:00' },

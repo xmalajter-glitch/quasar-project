@@ -1,8 +1,8 @@
 <template>
   <q-page class="flex column" style="height: calc(100vh - 50px);">
-    <!-- Olasť pre správy s fixnou výškou a scrollovaním -->
     <div class="q-pa-md col overflow-auto" id="chat-area">
-      <!-- Simulácia histórie -->
+      
+      // Simulacia historie
       <div class="text-center q-mb-md">
         <q-btn outline color="primary" label="Načítať históriu (Infinite Scroll)" size="sm" />
       </div>
@@ -18,9 +18,10 @@
       />
     </div>
 
-    <!-- Fixný príkazový riadok na spodku -->
+    // Fixny riadok na pisanie
     <div class="q-pa-sm border-top">
-      <!-- Informácia o tom, kto práve píše (Live preview) -->
+      
+      // Inforamcie o tom kto prave pise do daneho chatu
       <div v-if="typingUser" class="text-caption q-mb-xs q-px-sm">
         <q-icon name="edit" /> <em>{{ typingUser }} is typing...</em>
         <span class="text-primary cursor-pointer q-ml-sm" @click="showLiveText = true">(Zobraziť live text)</span>
@@ -40,7 +41,7 @@
       </q-input>
     </div>
 
-    <!-- Dialog pre "Live" sledovanie rozpísaného textu (špecialitka zo zadania) -->
+    // Dialog pre zive sledovanie rozpisaneho textu 
     <q-dialog v-model="showLiveText">
       <q-card style="min-width: 300px">
         <q-card-section>
@@ -60,7 +61,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useQuasar } from 'quasar'
-import { store } from '../store.js' // Pridaný import storu
+import { store } from '../store.js'
 
 const $q = useQuasar()
 
@@ -68,10 +69,9 @@ const newMessage = ref('')
 const typingUser = ref('')
 const showLiveText = ref(false)
 
-// Automaticky vyberie správy podľa aktuálneho kanála zo store.js
+// Vybratie sprav podla daneho kanalu
 const messages = computed(() => {
   const channelName = store.currentChannel.name
-  // Ak kanál ešte nemá založené pole správ v store, vytvoríme ho prázdne
   if (!store.messages[channelName]) {
     store.messages[channelName] = []
   }
@@ -91,9 +91,9 @@ function sendMessage() {
 
   // Odoslanie beznej spravy
   const isMention = text.includes('@')
-  const currentChannelName = store.currentChannel.name // Zistíme, v ktorom sme kanáli
+  const currentChannelName = store.currentChannel.name // Zistenie v akom kanali sa nachadzame
   
-  // Pridáme správu do aktuálneho kanála v store
+  // Pridanie spravy do aktualneho kanalu
   store.messages[currentChannelName].push({
     id: Date.now(),
     sender: 'FeroMaster',

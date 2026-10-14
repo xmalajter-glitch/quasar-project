@@ -2,7 +2,8 @@
   <CreateChannelDialog v-model="createDialog" @create="handleAddChannel" />
   
   <q-layout view="hHh LpR fFf">
-    <!-- HLAVIČKA -->
+    
+    //Hlavicka
     <q-header elevated class="bg-primary text-white">
       <q-toolbar>
         <q-btn dense flat round icon="menu" @click="toggleLeftDrawer" />
@@ -13,7 +14,7 @@
           {{ store.currentChannel.name }}
         </q-toolbar-title>
 
-        <!-- Prepínač stavu používateľa -->
+        //Prepinanie stavu pouzivatela
         <q-btn
           flat
           no-caps
@@ -51,14 +52,14 @@
           </q-menu>
         </q-btn>
 
-        <!-- Tlačidlo pre zobrazenie členov kanála (simulácia /list) -->
+        // Zobrazenie jednotlivych clenov kanala
         <q-btn dense flat round icon="people" @click="toggleRightDrawer">
           <q-tooltip>Členovia kanála (/list)</q-tooltip>
         </q-btn>
       </q-toolbar>
     </q-header>
 
-    <!-- ĽAVÝ PANEL: Zoznam kanálov -->
+    // Zoznam kanalov
     <q-drawer show-if-above v-model="leftDrawerOpen" side="left" bordered :width="250">
       <q-list>
         <q-item>
@@ -72,7 +73,7 @@
           </q-item-section>
         </q-item>
         
-        <!-- Vykreslenie kanálov -->
+        // Vykreslenie kanalov
         <q-item
           v-for="channel in channels"
           :key="channel.name"
@@ -89,7 +90,7 @@
             <q-item-label>{{ channel.name }}</q-item-label>
           </q-item-section>
 
-          <!-- Zvýraznenie pozvánky -->
+          // Pozvanka
           <q-item-section side v-if="channel.isInvited">
             <q-badge color="orange" label="Pozvánka" />
           </q-item-section>
@@ -97,7 +98,7 @@
       </q-list>
     </q-drawer>
 
-    <!-- PRAVÝ PANEL: Zoznam používateľov v kanáli -->
+    // Zoznam pouzivatelov v danom kanali
     <q-drawer v-model="rightDrawerOpen" side="right" bordered :width="250">
       <q-list>
         <q-item-label header>Členovia (#{{ store.currentChannel.name }})</q-item-label>
@@ -122,7 +123,7 @@
       </q-list>
     </q-drawer>
 
-    <!-- HLAVNÝ OBSAH (Samotný čet prichádza z IndexPage.vue) -->
+    // Hlavny obsah, prichadza zo store.js
     <q-page-container>
       <router-view />
     </q-page-container>
@@ -132,7 +133,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { store } from '../store.js' // Správne umiestnený import
+import { store } from '../store.js'
 import CreateChannelDialog from '@/components/CreateChannelDialog.vue'
 
 const router = useRouter()
@@ -168,7 +169,7 @@ const channels = ref([
   { name: 'dev-team', type: 'private', isInvited: false },
 ])
 
-// Funkcia na výber kanála (upravuje globálny store)
+// Vyber kanala
 function selectChannel(channel) {
   store.currentChannel = channel
 }
