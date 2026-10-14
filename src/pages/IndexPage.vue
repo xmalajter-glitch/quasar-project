@@ -67,7 +67,7 @@ const newMessage = ref('')
 const typingUser = ref('')
 const showLiveText = ref(false)
 
-// Dummy správy
+// Spravy v chate
 const messages = ref([
   { id: 1, sender: 'JanoAdmin', text: 'Vitajte v kanáli general!', time: '10:00' },
   { id: 2, sender: 'ZuzkaDND', text: 'Ahoj, potrebujem pomôcť s tým zadaním.', time: '10:02' },
@@ -86,7 +86,7 @@ function sendMessage() {
     return
   }
 
-  // Odoslanie bežnej správy
+  // Odoslanie beznej spravy
   const isMention = text.includes('@')
   messages.value.push({
     id: Date.now(),
@@ -105,7 +105,7 @@ function handleCommand(cmdText) {
   const args = cmdText.split(' ')
   const command = args[0]
 
-  // Simulácia rôznych príkazov cez Quasar Notifikácie
+  // Simulacia roznych prikazov cez Quasar oznamy
   switch(command) {
     case '/join':
       $q.notify({ type: 'positive', message: `Pripojili ste sa do kanála: ${args[1] || 'neznámy'}` })
@@ -124,18 +124,20 @@ function handleCommand(cmdText) {
   }
 }
 
-// Jednoduchá simulácia notifikácie (zo zadania)
-setTimeout(() => {
-  $q.notify({
-    message: 'JanoAdmin: "@FeroMaster Máš to hotové?"',
-    color: 'primary',
-    icon: 'message',
-    position: 'bottom-right',
-    actions: [{ label: 'Odpovedať', color: 'white' }]
-  })
-}, 10000)
+// Simulacia notifikacie s podmienkou app visiblity
+setInterval(() => {
+  if (!$q.appVisible) {
+    $q.notify({
+      message: 'JanoAdmin: "@FeroMaster Máš to hotové?"',
+      color: 'primary',
+      icon: 'message',
+      position: 'bottom-right',
+      actions: [{ label: 'Odpovedať', color: 'white' }]
+    })
+  }
+}, 15000)
 
-// Simulácia toho, že niekto iný píše
+// Simulacia pisania ineho uzivatela
 setInterval(() => {
   if (Math.random() > 0.7) {
     typingUser.value = 'ZuzkaDND'
