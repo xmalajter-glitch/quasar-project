@@ -1,5 +1,6 @@
 <template>
   <CreateChannelDialog v-model="createDialog" @create="handleAddChannel" />
+  
   <q-layout view="hHh LpR fFf">
     <!-- HLAVIČKA -->
     <q-header elevated class="bg-primary text-white">
@@ -7,9 +8,9 @@
         <q-btn dense flat round icon="menu" @click="toggleLeftDrawer" />
 
         <q-toolbar-title>
-          <q-icon name="tag" v-if="currentChannel.type === 'public'" />
+          <q-icon name="tag" v-if="store.currentChannel.type === 'public'" />
           <q-icon name="lock" v-else />
-          {{ currentChannel.name }}
+          {{ store.currentChannel.name }}
         </q-toolbar-title>
 
         <!-- Prepínač stavu používateľa -->
@@ -24,21 +25,21 @@
           <q-menu>
             <q-list style="min-width: 150px">
               <q-item clickable v-close-popup @click="setStatus('online')">
-                <q-item-section avatar
-                  ><q-icon color="positive" name="fiber_manual_record"
-                /></q-item-section>
+                <q-item-section avatar>
+                  <q-icon color="positive" name="fiber_manual_record" />
+                </q-item-section>
                 <q-item-section>Online</q-item-section>
               </q-item>
               <q-item clickable v-close-popup @click="setStatus('dnd')">
-                <q-item-section avatar
-                  ><q-icon color="negative" name="remove_circle"
-                /></q-item-section>
+                <q-item-section avatar>
+                  <q-icon color="negative" name="remove_circle" />
+                </q-item-section>
                 <q-item-section>Do Not Disturb</q-item-section>
               </q-item>
               <q-item clickable v-close-popup @click="setStatus('offline')">
-                <q-item-section avatar
-                  ><q-icon color="grey" name="radio_button_unchecked"
-                /></q-item-section>
+                <q-item-section avatar>
+                  <q-icon color="grey" name="radio_button_unchecked" />
+                </q-item-section>
                 <q-item-section>Offline</q-item-section>
               </q-item>
               <q-separator />
@@ -70,15 +71,16 @@
             </q-btn>
           </q-item-section>
         </q-item>
+        
         <!-- Vykreslenie kanálov -->
         <q-item
           v-for="channel in channels"
           :key="channel.name"
           clickable
           v-ripple
-          :active="currentChannel.name === channel.name"
+          :active="store.currentChannel.name === channel.name"
           active-class="bg-blue-1 text-primary text-bold"
-          @click="currentChannel = channel"
+          @click="selectChannel(channel)"
         >
           <q-item-section avatar style="min-width: 30px">
             <q-icon :name="channel.type === 'public' ? 'tag' : 'lock'" size="sm" />
@@ -98,7 +100,7 @@
     <!-- PRAVÝ PANEL: Zoznam používateľov v kanáli -->
     <q-drawer v-model="rightDrawerOpen" side="right" bordered :width="250">
       <q-list>
-        <q-item-label header>Členovia (#{{ currentChannel.name }})</q-item-label>
+        <q-item-label header>Členovia (#{{ store.currentChannel.name }})</q-item-label>
         <q-item v-for="user in channelUsers" :key="user.nick" clickable v-ripple>
           <q-item-section avatar>
             <q-avatar color="primary" text-color="white" size="md">
@@ -130,6 +132,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { store } from '../store.js' // Správne umiestnený import
 import CreateChannelDialog from '@/components/CreateChannelDialog.vue'
 
 const router = useRouter()
@@ -165,7 +168,10 @@ const channels = ref([
   { name: 'dev-team', type: 'private', isInvited: false },
 ])
 
-const currentChannel = ref(channels.value[0])
+// Funkcia na výber kanála (upravuje globálny store)
+function selectChannel(channel) {
+  store.currentChannel = channel
+}
 
 const channelUsers = ref([
   { nick: 'FeroMaster', status: 'online', isAdmin: false },
@@ -186,5 +192,4 @@ function handleAddChannel(channel) {
     { name: channel.name, type: channel.isPrivate ? 'private' : 'public', isInvited: false }
   )
 }
-
 </script>

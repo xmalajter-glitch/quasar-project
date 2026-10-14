@@ -58,8 +58,9 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useQuasar } from 'quasar'
+import { store } from '../store.js' // Pridaný import storu
 
 const $q = useQuasar()
 
@@ -67,13 +68,15 @@ const newMessage = ref('')
 const typingUser = ref('')
 const showLiveText = ref(false)
 
-// Spravy v chate
-const messages = ref([
-  { id: 1, sender: 'JanoAdmin', text: 'Vitajte v kanáli general!', time: '10:00' },
-  { id: 2, sender: 'ZuzkaDND', text: 'Ahoj, potrebujem pomôcť s tým zadaním.', time: '10:02' },
-  { id: 3, sender: 'JanoAdmin', text: '@FeroMaster Pozri sa na to prosím ťa.', time: '10:05', isMention: true },
-  { id: 4, sender: 'FeroMaster', text: 'Jasné, už na tom robím.', time: '10:06' }
-])
+// Automaticky vyberie správy podľa aktuálneho kanála zo store.js
+const messages = computed(() => {
+  const channelName = store.currentChannel.name
+  // Ak kanál ešte nemá založené pole správ v store, vytvoríme ho prázdne
+  if (!store.messages[channelName]) {
+    store.messages[channelName] = []
+  }
+  return store.messages[channelName]
+})
 
 function sendMessage() {
   const text = newMessage.value.trim()
@@ -88,12 +91,15 @@ function sendMessage() {
 
   // Odoslanie beznej spravy
   const isMention = text.includes('@')
-  messages.value.push({
+  const currentChannelName = store.currentChannel.name // Zistíme, v ktorom sme kanáli
+  
+  // Pridáme správu do aktuálneho kanála v store
+  store.messages[currentChannelName].push({
     id: Date.now(),
     sender: 'FeroMaster',
     text: text,
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    isMention: isMention // Tu priradíme vypočítanú premennú
+    isMention: isMention
   })
 
   newMessage.value = ''
@@ -126,8 +132,7 @@ function handleCommand(cmdText) {
 
 // Simulacia notifikacie s podmienkou app visiblity
 setInterval(() => {
-  if (!$q.appVisible) {
-    $q.notify({
+  if (!$q.appVisible) {$q.notify({
       message: 'JanoAdmin: "@FeroMaster Máš to hotové?"',
       color: 'primary',
       icon: 'message',
