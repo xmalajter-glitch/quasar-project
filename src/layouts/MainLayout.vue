@@ -14,17 +14,17 @@
           {{ store.currentChannel.name }}
         </q-toolbar-title>
 
-        <!-- Prepinanie stavu pouzivatela -->
+        <!-- Prepinanie stavu pouzivatela a notifikacii -->
         <q-btn
           flat
           no-caps
           icon="account_circle"
-          :label="currentUser.nick"
+          :label="store.currentUser.nick"
           style="margin-right: 4px"
         >
           <q-badge floating :color="statusColor" rounded />
           <q-menu>
-            <q-list style="min-width: 150px">
+            <q-list style="min-width: 210px">
               <q-item clickable v-close-popup @click="setStatus('online')">
                 <q-item-section avatar>
                   <q-icon color="positive" name="fiber_manual_record" />
@@ -35,7 +35,7 @@
                 <q-item-section avatar>
                   <q-icon color="negative" name="remove_circle" />
                 </q-item-section>
-                <q-item-section>Do Not Disturb</q-item-section>
+                <q-item-section>Nerušiť</q-item-section>
               </q-item>
               <q-item clickable v-close-popup @click="setStatus('offline')">
                 <q-item-section avatar>
@@ -43,7 +43,21 @@
                 </q-item-section>
                 <q-item-section>Offline</q-item-section>
               </q-item>
+              
               <q-separator />
+              
+              <!-- Prepínač notifikácií zo zadania -->
+              <q-item tag="label" v-ripple>
+                <q-item-section>
+                  <q-item-label caption>Notifikácie v ktorých som spomenutý</q-item-label>
+                </q-item-section>
+                <q-item-section side>
+                  <q-toggle color="primary" v-model="store.settings.notifyOnlyMentions" />
+                </q-item-section>
+              </q-item>
+
+              <q-separator />
+              
               <q-item clickable v-close-popup @click="logout">
                 <q-item-section avatar><q-icon name="logout" /></q-item-section>
                 <q-item-section>Odhlásiť sa</q-item-section>
@@ -75,7 +89,7 @@
         
         <!-- Vykreslenie kanalov -->
         <q-item
-          v-for="channel in channels"
+          v-for="channel in sortedChannels"
           :key="channel.name"
           clickable
           v-ripple
@@ -83,6 +97,15 @@
           active-class="bg-blue-1 text-primary text-bold"
           @click="selectChannel(channel)"
         >
+          <!-- Menu na opustenie, pri staleceni praveho tlacidla na mysi -->
+          <q-menu context-menu>
+            <q-list dense style="min-width: 120px">
+              <q-item clickable v-close-popup @click="leaveChannel(channel)">
+                <q-item-section class="text-negative">Opustiť kanál</q-item-section>
+              </q-item>
+            </q-list>
+          </q-menu>
+
           <q-item-section avatar style="min-width: 30px">
             <q-icon :name="channel.type === 'public' ? 'tag' : 'lock'" size="sm" />
           </q-item-section>
@@ -123,7 +146,7 @@
       </q-list>
     </q-drawer>
 
-    <!-- Hlavny obsah, prichadza zo store.js -->
+    <!-- Hlavny obsah -->
     <q-page-container>
       <router-view />
     </q-page-container>
@@ -148,30 +171,38 @@ function toggleRightDrawer() {
   rightDrawerOpen.value = !rightDrawerOpen.value
 }
 
-// Dummy dáta pre prototyp
-const currentUser = ref({ nick: 'FeroMaster', status: 'online' })
-
+// Reaguje na status ulozeny v store
 const statusColor = computed(() => {
-  if (currentUser.value.status === 'online') return 'positive'
-  if (currentUser.value.status === 'dnd') return 'negative'
+  if (store.currentUser.status === 'online') return 'positive'
+  if (store.currentUser.status === 'dnd') return 'negative'
   return 'grey'
 })
 
 function setStatus(status) {
-  currentUser.value.status = status
+  store.currentUser.status = status
 }
 
-// Zoznam kanálov (simulácia toho, čo používateľ vidí)
-const channels = ref([
-  { name: 'general', type: 'public', isInvited: false },
-  { name: 'oznamy', type: 'public', isInvited: false },
-  { name: 'tajny-projekt', type: 'private', isInvited: true }, // Topovaný/zvýraznený kanál
-  { name: 'dev-team', type: 'private', isInvited: false },
-])
+// Zotriedenie kanálov - tie s "isInvited" idú úplne hore
+const sortedChannels = computed(() => {
+  return [...store.channels].sort((a, b) => {
+    if (a.isInvited === b.isInvited) return 0;
+    return a.isInvited ? -1 : 1; 
+  })
+})
 
-// Vyber kanala
 function selectChannel(channel) {
   store.currentChannel = channel
+}
+
+// Funkcia na opustenie kanála
+function leaveChannel(channel) {
+  const index = store.channels.findIndex(c => c.name === channel.name)
+  if (index !== -1) {
+    store.channels.splice(index, 1)
+    if (store.currentChannel.name === channel.name && store.channels.length > 0) {
+      store.currentChannel = store.channels[0]
+    }
+  }
 }
 
 const channelUsers = ref([
@@ -189,7 +220,7 @@ function logout() {
 }
 
 function handleAddChannel(channel) {
-  channels.value.push(
+  store.channels.push(
     { name: channel.name, type: channel.isPrivate ? 'private' : 'public', isInvited: false }
   )
 }

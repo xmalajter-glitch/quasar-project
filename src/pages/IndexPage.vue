@@ -1,19 +1,14 @@
 <template>
   <q-page class="flex column" style="height: calc(100vh - 50px);">
     <div class="q-pa-md col overflow-auto" id="chat-area">
-      
-      <!-- Simulacia historie -->
-      <div class="text-center q-mb-md">
-        <q-btn outline color="primary" label="Načítať históriu (Infinite Scroll)" size="sm" />
-      </div>
 
       <q-chat-message
         v-for="msg in messages"
         :key="msg.id"
         :name="msg.sender"
         :text="[msg.text]"
-        :sent="msg.sender === 'FeroMaster'"
-        :bg-color="msg.isMention ? 'amber-3' : (msg.sender === 'FeroMaster' ? 'blue-2' : 'grey-2')"
+        :sent="msg.sender === store.currentUser.nick"
+        :bg-color="msg.isMention ? 'amber-3' : (msg.sender === store.currentUser.nick ? 'blue-2' : 'grey-2')"
         :stamp="msg.time"
       />
     </div>
@@ -31,7 +26,7 @@
         v-model="newMessage"
         outlined
         dense
-        placeholder="Napíšte správu alebo použite príkaz (napr. /join, /kick, /list, @nickname)..."
+        placeholder="Napíšte správu alebo použite príkaz (napr. /join, /kick, /quit, @nickname)..."
         @keyup.enter="sendMessage"
         @update:model-value="simulateTyping"
       >
@@ -41,7 +36,7 @@
       </q-input>
     </div>
 
-     <!-- Dialog pre zive sledovanie rozpisaneho textu -->
+    <!-- Dialog pre zive sledovanie rozpisaneho textu -->
     <q-dialog v-model="showLiveText">
       <q-card style="min-width: 300px">
         <q-card-section>
@@ -59,7 +54,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { store } from '../store.js'
 
@@ -78,6 +73,16 @@ const messages = computed(() => {
   return store.messages[channelName]
 })
 
+// Scrollovanie najnovsich sprav
+onMounted(() => {
+  scrollToBottom()
+})
+
+watch(() => store.currentChannel.name, () => {
+  scrollToBottom()
+})
+// ------------------------------------------------
+
 function sendMessage() {
   const text = newMessage.value.trim()
   if (!text) return
@@ -91,12 +96,12 @@ function sendMessage() {
 
   // Odoslanie beznej spravy
   const isMention = text.includes('@')
-  const currentChannelName = store.currentChannel.name // Zistenie v akom kanali sa nachadzame
+  const currentChannelName = store.currentChannel.name
   
   // Pridanie spravy do aktualneho kanalu
   store.messages[currentChannelName].push({
     id: Date.now(),
-    sender: 'FeroMaster',
+    sender: store.currentUser.nick,
     text: text,
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     isMention: isMention
@@ -107,15 +112,22 @@ function sendMessage() {
 }
 
 function handleCommand(cmdText) {
-  // Rozdelenie na príkaz a argumenty (napr. z "/join tajny" vznikne ['/join', 'tajny'])
   const args = cmdText.split(' ')
   const command = args[0]
 
-  // Simulacia roznych prikazov cez Quasar oznamy
   switch(command) {
     case '/join':
+      store.channels.push({ name: args[1] || 'novy-kanal', type: 'public', isInvited: false })
       $q.notify({ type: 'positive', message: `Pripojili ste sa do kanála: ${args[1] || 'neznámy'}` })
       break;
+    case '/cancel':
+    case '/quit': {// Opustenie kanala cez prikazovy riadok
+      const idx = store.channels.findIndex(c => c.name === store.currentChannel.name)
+      if (idx !== -1) store.channels.splice(idx, 1)
+      if (store.channels.length > 0) store.currentChannel = store.channels[0]
+      $q.notify({ type: 'warning', message: 'Opustili ste kanál.' })
+      break;
+    }
     case '/list':
       $q.notify({ type: 'info', message: 'Otvorí sa panel používateľov (pozri vpravo hore ikonu).' })
       break;
@@ -130,25 +142,32 @@ function handleCommand(cmdText) {
   }
 }
 
-// Simulacia notifikacie s podmienkou app visiblity
+// Simulacia notifikacie s podmienkou app visibility a statusu
 setInterval(() => {
-  if (!$q.appVisible) {$q.notify({
-      message: 'JanoAdmin: "@FeroMaster Máš to hotové?"',
-      color: 'primary',
-      icon: 'message',
-      position: 'bottom-right',
-      actions: [{ label: 'Odpovedať', color: 'white' }]
-    })
-  }
+  // Rezim nerusit
+  if ($q.appVisible || store.currentUser.status === 'dnd') return;
+  
+  const isPingedMessage = Math.random() > 0.5 
+  
+  // Notifikacia urcena len pre uzivtela
+  if (store.settings.notifyOnlyMentions && !isPingedMessage) return;
+
+  $q.notify({
+    message: 'JanoAdmin',
+    caption: isPingedMessage ? `@${store.currentUser.nick} Máš to hotové?` : 'Ahojte, pridal som novú funkciu.',
+    color: isPingedMessage ? 'orange' : 'primary',
+    icon: 'message',
+    position: 'bottom-right'
+  })
 }, 15000)
 
 // Simulacia pisania ineho uzivatela
 setInterval(() => {
-  if (Math.random() > 0.7) {
+  if (Math.random() > 0.2) {
     typingUser.value = 'ZuzkaDND'
     setTimeout(() => { typingUser.value = '' }, 4000)
   }
-}, 15000)
+}, 6000)
 
 function simulateTyping() {
   // Tu by sa odosielala info cez websocket na server

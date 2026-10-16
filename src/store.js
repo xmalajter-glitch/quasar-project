@@ -1,20 +1,51 @@
 import { reactive } from 'vue'
 
-// Centralny store pre spravu stavu aplikacie
-export const store = reactive({
-  currentChannel: { name: 'general', type: 'public' }, // Predvoleny kanal
+// Funkcia pre generovanie sprav na infinity scrollovanie
+function generateDummyMessages(count) {
+  const msgs = []
+  for (let i = 1; i <= count; i++) {
+    msgs.push({
+      id: i,
+      sender: i % 2 === 0 ? 'ZuzkaDND' : 'JanoAdmin',
+      text: `Toto je testovacia správa číslo ${i} pre testovanie scrollovania chatu.`,
+      time: `10:${i < 10 ? '0' + i : (i % 60 < 10 ? '0' + (i % 60) : i % 60)}`,
+      isMention: false 
+    })
+  }
   
-  // Zoznam sprav pre jednotlive kanaly
+  // Pridanie oznacenej spravy na koniec zoznamu
+  msgs.push({
+    id: count + 1,
+    sender: 'ZuzkaDND',
+    text: '@FeroMaster pomôžeš mi s týmto nekonečným scrollovaním?',
+    time: '11:00',
+    isMention: true
+  })
+  
+  return msgs
+}
+
+export const store = reactive({
+  // Aktualny prihlaseny pouzivatel
+  currentUser: { nick: 'FeroMaster', status: 'online' },
+
+  // Nastavenia pouzivatelov
+  settings: {
+    notifyOnlyMentions: false
+  },
+
+  // Zoznam kanalov
+  channels: [
+    { name: 'general', type: 'public', isInvited: false },
+    { name: 'oznamy', type: 'public', isInvited: false },
+    { name: 'tajny-projekt', type: 'private', isInvited: true }, // Pozvánka
+    { name: 'dev-team', type: 'private', isInvited: false }
+  ],
+  
+  currentChannel: { name: 'general', type: 'public', isInvited: false },
+
+  // Spravy kanalov
   messages: {
-    'general': [
-      { id: 1, sender: 'JanoAdmin', text: 'Vitajte v kanáli general!', time: '10:00' },
-      { id: 2, sender: 'ZuzkaDND', text: 'Ahoj, potrebujem pomôcť s tým zadaním.', time: '10:02' }
-    ],
-    'oznamy': [
-      { id: 1, sender: 'JanoAdmin', text: 'Dnes o 15:00 bude údržba servera.', time: '08:00' }
-    ],
-    'tajny-projekt': [
-      { id: 1, sender: 'FeroMaster', text: 'Tajný projekt, nikomu o tomto nehovorte.', time: '11:00' }
-    ]
+    'general': generateDummyMessages(50) // Tu vygenerujeme 50 správ do general kanála
   }
 })

@@ -1,69 +1,45 @@
-<script setup lang="ts">
-import { ref} from 'vue'
-import { useRouter } from 'vue-router'
-
-const router = useRouter()
-
-const email = ref(null)
-const password = ref(null)
-
-const showPassword = ref(false)
-
-const emailRules = [(val) => !!val || 'Email is required']
-const passwordRules = [(val) => !!val || 'Password is required']
-
-const onSubmit = () => {
-  document.cookie = 'auth_session=simulated; path=/; max-age=3600; SameSite=Lax'
-  router.push({ name: 'home' })
-}
-
-</script>
-
 <template>
-  <q-form
-    autocorrect="off"
-    autocapitalize="off"
-    spellcheck="false"
-    novalidate
-    class="q-gutter-y-sm form"
-    @submit.prevent="onSubmit"
-  >
-    <q-input
-      outlined
-      type="email"
-      label="Email *"
-      v-model="email"
-      :rules="emailRules"
+  <q-form @submit="onSubmit" class="q-mt-md" style="width: 300px; max-width: 90vw;">
+    <q-input 
+      v-model="email" 
+      label="Email" 
+      outlined 
+      dense 
       lazy-rules
-      autocomplete="email"
-      hide-bottom-space
+      :rules="[
+        val => !!val || 'Email je povinný', 
+        val => /.+@.+\..+/.test(val) || 'Neplatný formát emailu'
+      ]" 
+      class="q-mb-md" 
     />
-
-    <q-input
-      outlined
-      v-model="password"
-      label="Password *"
-      :type="showPassword ? 'text' : 'password'"
-      :rules="passwordRules"
+    <q-input 
+      v-model="password" 
+      type="password" 
+      label="Heslo" 
+      outlined 
+      dense 
       lazy-rules
-      autocomplete="current-password"
-      hide-bottom-space
-    >
-      <template #append>
-        <q-icon
-          :name="showPassword ? 'visibility' : 'visibility_off'"
-          class="cursor-pointer"
-          @click="showPassword = !showPassword"
-        />
-      </template>
-    </q-input>
-
-    <q-btn color="primary" label="Log in" type="submit" class="full-width" />
+      :rules="[
+        val => val && val.length >= 6 || 'Heslo musí mať aspoň 6 znakov'
+      ]" 
+      class="q-mb-md" 
+    />
+    <q-btn type="submit" color="primary" label="Prihlásiť sa" class="full-width" />
   </q-form>
 </template>
 
-<style scoped>
-.form {
-  width: min(400px, calc(100% - 32px));
+<script setup lang="ts">
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
+const email = ref('')
+const password = ref('')
+
+function onSubmit() {
+  document.cookie = 'auth_session=true; path=/; SameSite=Lax';
+  
+  // Presmerovanie na hlavnu stranku
+  router.push({ name: 'home' })
 }
-</style>
+</script>
