@@ -1,14 +1,24 @@
 <template>
   <q-dialog v-model="open" @hide="reset">
     <q-card class="create-dialog">
-      <q-card-section class="text-h6">New channel</q-card-section>
-      <q-card-section class="q-pt-none">
-        <q-input outlined v-model="name" label="Name" autofocus />
-        <q-toggle v-model="isPrivate" label="Private?" class="q-mt-sm" />
+      <q-card-section class="text-h6">
+        {{ $t('channel.new') }}
       </q-card-section>
+
+      <q-card-section class="q-pt-none">
+        <q-input v-model="name" outlined :label="$t('channel.name')" autofocus />
+
+        <q-toggle v-model="isPrivate" :label="$t('channel.private')" class="q-mt-sm" />
+      </q-card-section>
+
       <q-card-actions align="right">
-        <q-btn label="Cancel" v-close-popup />
-        <q-btn label="Create" color="primary" :disable="!canCreate" @click="createChannel" />
+        <q-btn :label="$t('channel.cancel')" v-close-popup />
+        <q-btn
+          :label="$t('channel.create')"
+          color="primary"
+          :disable="!canCreate"
+          @click="createChannel"
+        />
       </q-card-actions>
     </q-card>
   </q-dialog>
