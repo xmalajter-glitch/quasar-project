@@ -12,10 +12,22 @@ const showPassword = ref(false)
 
 const emailRules = [
   (val) => !!val || t('validation.emailRequired'),
+  (val) =>
+    !val ||
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val) ||
+    t('validation.emailInvalid'),
 ]
 
 const passwordRules = [
   (val) => !!val || t('validation.passwordRequired'),
+  (val) =>
+    !val || val.length >= 8 || t('validation.passwordMin'),
+  (val) =>
+    !val || /\d/.test(val) || t('validation.passwordNumber'),
+  (val) =>
+    !val ||
+    /[^a-zA-Z0-9\s]/.test(val) ||
+    t('validation.passwordSpecial'),
 ]
 
 const onSubmit = () => {
