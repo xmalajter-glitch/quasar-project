@@ -2,9 +2,13 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useQuasar } from 'quasar'
+import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
 const { t } = useI18n()
+const $q = useQuasar()
+const authStore = useAuthStore()
 
 const firstName = ref('')
 const lastName = ref('')
@@ -15,6 +19,7 @@ const passwordConfirm = ref('')
 
 const showPassword = ref(false)
 const showPasswordConfirm = ref(false)
+const isLoading = ref(false)
 
 const firstNameRules = [
   (val) => !!val || t('validation.firstNameRequired'),
@@ -51,10 +56,27 @@ const passwordMatch = [
     val === password.value || t('validation.passwordMatch'),
 ]
 
-const onSubmit = () => {
-  document.cookie =
-    'auth_session=simulated; path=/; max-age=3600; SameSite=Lax'
-  router.push({ name: 'home' })
+const onSubmit = async () => {
+  if (isLoading.value) return
+  isLoading.value = true
+
+  try {
+    await authStore.register({
+      name: firstName.value,
+      surname: lastName.value,
+      nickname: nickname.value,
+      email: email.value,
+      password: password.value
+    })
+    
+    $q.notify({ type: 'positive', message: 'Registrácia bola úspešná' })
+    router.push({ name: 'home' })
+  } catch (error) {
+    const errorMsg = error.response?.data?.message || error.response?.data?.[0]?.message || 'Chyba pri registrácii'
+    $q.notify({ type: 'negative', message: errorMsg })
+  } finally {
+    isLoading.value = false
+  }
 }
 </script>
 
@@ -154,6 +176,7 @@ const onSubmit = () => {
       :label="t('register.submit')"
       class="full-width"
       type="submit"
+      :loading="isLoading"
     />
   </q-form>
 </template>

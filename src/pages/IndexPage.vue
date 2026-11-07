@@ -1,14 +1,13 @@
 <template>
   <q-page class="flex column" style="height: calc(100vh - 50px);">
     <div class="q-pa-md col overflow-auto" id="chat-area">
-
       <q-chat-message
         v-for="msg in messages"
         :key="msg.id"
         :name="msg.sender"
         :text="[msg.text]"
-        :sent="msg.sender === store.currentUser.nick"
-        :bg-color="msg.isMention ? 'amber-3' : (msg.sender === store.currentUser.nick ? 'blue-2' : 'grey-2')"
+        :sent="msg.sender === authStore.user?.nickname"
+        :bg-color="msg.isMention ? 'amber-3' : (msg.sender === authStore.user?.nickname ? 'blue-2' : 'grey-2')"
         :stamp="msg.time"
       />
     </div>
@@ -54,130 +53,215 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, onUnmounted } from 'vue'
 import { useQuasar } from 'quasar'
 import { store } from '../store.js'
+import { api } from '../boot/axios'
+import { useAuthStore } from '../stores/auth'
+import { socket } from '../socket.js'
 
+const authStore = useAuthStore()
 const $q = useQuasar()
 
 const newMessage = ref('')
 const typingUser = ref('')
 const showLiveText = ref(false)
+const messages = ref([])
 
-// Vybratie sprav podla daneho kanalu
-const messages = computed(() => {
-  const channelName = store.currentChannel.name
-  if (!store.messages[channelName]) {
-    store.messages[channelName] = []
+// Pomocne funkcie pre nickname
+function isMentionOfMe(content) {
+  const nick = authStore.user?.nickname
+  if (!nick || !content) return false
+  return new RegExp(`@${nick}\\b`, 'i').test(content)
+}
+
+function mapMessage(msg) {
+  const content = msg.content || msg.text || ''
+  const created = msg.createdAt || msg.created_at
+  return {
+    id: msg.id,
+    userId: msg.userId ?? msg.user_id,
+    channelId: msg.channelId ?? msg.channel_id,
+    sender: msg.user?.nickname || 'Unknown',
+    text: content,
+    time: created
+      ? new Date(created).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : '',
+    isMention: isMentionOfMe(content),
   }
-  return store.messages[channelName]
-})
+}
 
-// Scrollovanie najnovsich sprav
+function addMessage(msg) {
+  if (messages.value.some((m) => m.id === msg.id)) return // deduplikácia
+  messages.value.push(msg)
+  scrollToBottom()
+}
+
+// Systemove notifikacie
+function maybeNotify(msg) {
+  if (msg.userId === authStore.user?.id) return       
+  if (store.currentUser.status !== 'online') return   
+  if (store.settings.notifyOnlyMentions && !msg.isMention) return
+
+  const preview = msg.text.length > 60 ? msg.text.slice(0, 60) + '…' : msg.text
+
+  if ($q.appVisible) {
+    // notifikacie v apke pre kanal, iny nez otovreny
+    if (Number(msg.channelId) !== Number(store.currentChannel?.id)) {
+      $q.notify({
+        message: msg.sender,
+        caption: preview,
+        color: msg.isMention ? 'orange' : 'primary',
+        icon: msg.isMention ? 'alternate_email' : 'message',
+        position: 'bottom-right',
+        timeout: 4000,
+      })
+    }
+    return
+  }
+
+  // Ak app nieje visible, posle sa systemova notifikacia
+  if ('Notification' in window && Notification.permission === 'granted') {
+    const n = new Notification(msg.sender, { body: preview })
+    n.onclick = () => window.focus()
+  }
+}
+
+// Historia sprav
+const fetchMessages = async () => {
+  if (!store.currentChannel?.id) return
+  try {
+    const response = await api.get(`/channels/${store.currentChannel.id}/messages`)
+    messages.value = response.data.map(mapMessage)
+    scrollToBottom()
+  } catch (error) {
+    console.error('Failed to fetch messages:', error)
+  }
+}
+
+// Socket
+function joinAllChannels() {
+  store.channels.forEach((ch) => {
+    if (ch.id) socket.emit('joinChannel', ch.id)
+  })
+}
+
+function onNewMessage(raw) {
+  console.log('new:message prišlo', raw, 'aktuálny kanál:', store.currentChannel?.id)
+
+  const msg = mapMessage(raw)
+
+  // Zobrazovanie iba aktualnych kanalov
+  if (Number(msg.channelId) === Number(store.currentChannel?.id)) addMessage(msg)
+
+  maybeNotify(msg)
+}
+
 onMounted(() => {
-  scrollToBottom()
+  fetchMessages()
+  socket.on('new:message', onNewMessage)
+  socket.on('connect', joinAllChannels)
+  if (socket.connected) joinAllChannels()
 })
 
-watch(() => store.currentChannel.name, () => {
-  scrollToBottom()
+onUnmounted(() => {
+  socket.off('new:message', onNewMessage)
+  socket.off('connect', joinAllChannels)
 })
-// ------------------------------------------------
 
-function sendMessage() {
+// Menenie kanalov po pridani
+watch(() => store.channels.map((c) => c.id), joinAllChannels, { immediate: true })
+
+// Zmena kanala
+watch(() => store.currentChannel?.id, fetchMessages)
+
+// Odosielanie
+async function sendMessage() {
   const text = newMessage.value.trim()
   if (!text) return
 
-  // Detekcia príkazov z "príkazového riadku"
   if (text.startsWith('/')) {
-    handleCommand(text)
+    await handleCommand(text)
     newMessage.value = ''
     return
   }
 
-  // Odoslanie beznej spravy
-  const isMention = text.includes('@')
-  const currentChannelName = store.currentChannel.name
-  
-  // Pridanie spravy do aktualneho kanalu
-  store.messages[currentChannelName].push({
-    id: Date.now(),
-    sender: store.currentUser.nick,
-    text: text,
-    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    isMention: isMention
-  })
+  if (!store.currentChannel?.id) {
+    $q.notify({ type: 'negative', message: 'Vyberte si kanál na posielanie správ.' })
+    return
+  }
 
-  newMessage.value = ''
-  scrollToBottom()
+  try {
+    const response = await api.post(`/channels/${store.currentChannel.id}/messages`, {
+      content: text,
+    })
+    newMessage.value = ''
+    // správa príde aj cez socket, addMessage deduplikuje podľa id
+    addMessage(mapMessage(response.data))
+  } catch (error) {
+    console.error('Failed to send message:', error)
+    $q.notify({ type: 'negative', message: 'Správu sa nepodarilo odoslať.' })
+  }
 }
 
-function handleCommand(cmdText) {
+async function handleCommand(cmdText) {
   const args = cmdText.split(' ')
   const command = args[0]
+  const targetName = args[1]
 
-  switch(command) {
-    case '/join':
-      store.channels.push({ name: args[1] || 'novy-kanal', type: 'public', isInvited: false })
-      $q.notify({ type: 'positive', message: `Pripojili ste sa do kanála: ${args[1] || 'neznámy'}` })
-      break;
-    case '/cancel':
-    case '/quit': {// Opustenie kanala cez prikazovy riadok
-      const idx = store.channels.findIndex(c => c.name === store.currentChannel.name)
-      if (idx !== -1) store.channels.splice(idx, 1)
-      if (store.channels.length > 0) store.currentChannel = store.channels[0]
-      $q.notify({ type: 'warning', message: 'Opustili ste kanál.' })
-      break;
+  try {
+    switch (command) {
+      case '/join':
+        if (!targetName) throw new Error('Chýba názov kanála')
+        $q.notify({ type: 'info', message: `Prebieha pripájanie k ${targetName}...` })
+        break
+      case '/cancel':
+      case '/quit':
+        if (!store.currentChannel?.name) return
+        await api.post(`/channels/${command === '/quit' ? 'quit' : 'cancel'}`, {
+          channelName: store.currentChannel.name,
+        })
+        $q.notify({ type: 'warning', message: 'Opustili ste kanál.' })
+        break
+      case '/list':
+        $q.notify({ type: 'info', message: 'Otvorí sa panel používateľov.' })
+        break
+      case '/kick':
+        if (!targetName) throw new Error('Chýba nick používateľa')
+        await api.post('/channels/kick', {
+          channelName: store.currentChannel.name,
+          nickname: targetName,
+        })
+        $q.notify({ type: 'positive', message: `Hlasovali ste za vyhodenie ${targetName}.` })
+        break
+      case '/invite':
+        if (!targetName) throw new Error('Chýba nick používateľa')
+        await api.post('/channels/invite', {
+          channelName: store.currentChannel.name,
+          nickname: targetName,
+        })
+        $q.notify({ type: 'positive', message: `Pozvánka pre ${targetName} odoslaná.` })
+        break
+      default:
+        $q.notify({ type: 'negative', message: `Neznámy príkaz: ${command}` })
     }
-    case '/list':
-      $q.notify({ type: 'info', message: 'Otvorí sa panel používateľov (pozri vpravo hore ikonu).' })
-      break;
-    case '/kick':
-      $q.notify({ type: 'warning', message: `Hlasovali ste za vyhodenie používateľa ${args[1]}.` })
-      break;
-    case '/invite':
-      $q.notify({ type: 'positive', message: `Pozvánka pre ${args[1]} bola odoslaná.` })
-      break;
-    default:
-      $q.notify({ type: 'negative', message: `Neznámy príkaz: ${command}` })
+  } catch (err) {
+    $q.notify({
+      type: 'negative',
+      message: err.response?.data?.message || err.message || 'Chyba pri vykonávaní príkazu',
+    })
   }
 }
 
-// Simulacia notifikacie s podmienkou app visibility a statusu
-setInterval(() => {
-  // Rezim nerusit
-  if ($q.appVisible || store.currentUser.status === 'dnd') return;
-  
-  const isPingedMessage = Math.random() > 0.5 
-  
-  // Notifikacia urcena len pre uzivtela
-  if (store.settings.notifyOnlyMentions && !isPingedMessage) return;
-
-  $q.notify({
-    message: 'JanoAdmin',
-    caption: isPingedMessage ? `@${store.currentUser.nick} Máš to hotové?` : 'Ahojte, pridal som novú funkciu.',
-    color: isPingedMessage ? 'orange' : 'primary',
-    icon: 'message',
-    position: 'bottom-right'
-  })
-}, 15000)
-
-// Simulacia pisania ineho uzivatela
-setInterval(() => {
-  if (Math.random() > 0.2) {
-    typingUser.value = 'ZuzkaDND'
-    setTimeout(() => { typingUser.value = '' }, 4000)
-  }
-}, 6000)
-
 function simulateTyping() {
-  // Tu by sa odosielala info cez websocket na server
+  // neskôr WebSocket eventy
 }
 
 function scrollToBottom() {
   setTimeout(() => {
     const chatArea = document.getElementById('chat-area')
     if (chatArea) chatArea.scrollTop = chatArea.scrollHeight
-  }, 50)
+  }, 100)
 }
 </script>
 

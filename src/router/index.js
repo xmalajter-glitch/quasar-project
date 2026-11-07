@@ -7,6 +7,7 @@ import {
 } from 'vue-router'
 
 import routes from './routes.js'
+import { useAuthStore } from '../stores/auth'
 
 export default defineRouter(() => {
   const createHistory = import.meta.env.QUASAR_SERVER
@@ -22,12 +23,10 @@ export default defineRouter(() => {
   })
 
   Router.beforeEach((to) => {
-    const isAuthenticated =
-      typeof document !== 'undefined' &&
-      document.cookie.split(';').some((cookie) => cookie.trim().startsWith('auth_session='))
+    const authStore = useAuthStore()
+    const isAuthenticated = !!authStore.token
 
     const requiresAuth = to.matched.some((record) => record.meta.requiresAuth)
-
     const guestOnly = to.matched.some((record) => record.meta.guestOnly)
 
     if (requiresAuth && !isAuthenticated) {

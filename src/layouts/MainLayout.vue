@@ -19,7 +19,7 @@
           flat
           no-caps
           icon="account_circle"
-          :label="store.currentUser.nick"
+          :label="authStore.user?.nickname || authStore.user?.name || 'Neznámy'"
           style="margin-right: 4px"
         >
           <q-badge floating :color="statusColor" rounded />
@@ -46,7 +46,7 @@
               
               <q-separator />
               
-              <!-- Prepínač notifikácií zo zadania -->
+              <!-- Prepinac notifikacii -->
               <q-item tag="label" v-ripple>
                 <q-item-section>
                   <q-item-label caption>Notifikácie v ktorých som spomenutý</q-item-label>
@@ -57,6 +57,11 @@
               </q-item>
 
               <q-separator />
+
+              <q-item clickable v-close-popup @click="enableNotifications">
+                <q-item-section avatar><q-icon name="notifications" /></q-item-section>
+                <q-item-section>Povoliť notifikácie</q-item-section>
+              </q-item>
               
               <q-item clickable v-close-popup @click="logout">
                 <q-item-section avatar><q-icon name="logout" /></q-item-section>
@@ -97,7 +102,7 @@
           active-class="bg-blue-1 text-primary text-bold"
           @click="selectChannel(channel)"
         >
-          <!-- Menu na opustenie, pri staleceni praveho tlacidla na mysi -->
+          <!-- Opustenie kanala pomocou stlacenia mysi-->
           <q-menu context-menu>
             <q-list dense style="min-width: 120px">
               <q-item clickable v-close-popup @click="leaveChannel(channel)">
@@ -137,8 +142,8 @@
           </q-item-section>
           <q-item-section side>
             <q-icon
-              :name="user.status === 'online' ? 'fiber_manual_record' : 'radio_button_unchecked'"
-              :color="user.status === 'online' ? 'positive' : 'grey'"
+              :name="(store.presence[user.id] ?? 'offline') === 'offline' ? 'radio_button_unchecked' : 'fiber_manual_record'"
+              :color="{ online: 'positive', dnd: 'negative' }[store.presence[user.id]] ?? 'grey'"
               size="xs"
             />
           </q-item-section>
@@ -154,24 +159,153 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { api } from '../boot/axios'
 import { store } from '../store.js'
+import { useAuthStore } from '../stores/auth'
+import { socket } from '../socket.js'
 import CreateChannelDialog from '@/components/CreateChannelDialog.vue'
+import { useQuasar } from 'quasar'
 
 const router = useRouter()
+const $q = useQuasar()
+const authStore = useAuthStore()
 
 const leftDrawerOpen = ref(false)
 const rightDrawerOpen = ref(false)
+const createDialog = ref(false)
+const channelUsers = ref([])
 
-function toggleLeftDrawer() {
-  leftDrawerOpen.value = !leftDrawerOpen.value
-}
-function toggleRightDrawer() {
-  rightDrawerOpen.value = !rightDrawerOpen.value
+// Stav uzivatela (online / dnd / offline)
+function identify() {
+  if (!authStore.user?.id) return
+  socket.emit('identify', {
+    userId: authStore.user.id,
+    status: store.currentUser.status,
+  })
 }
 
-// Reaguje na status ulozeny v store
+function onPresenceAll(all) {
+  Object.entries(all).forEach(([id, st]) => {
+    store.presence[id] = st
+  })
+}
+
+function onPresenceUpdate({ userId, status }) {
+  store.presence[userId] = status
+}
+
+// Nacitanie kanalov pri spusteni
+onMounted(async () => {
+  socket.on('connect', identify)
+  socket.on('presence:all', onPresenceAll)
+  socket.on('presence:update', onPresenceUpdate)
+  if (socket.connected) identify()
+
+  try {
+    const response = await api.get('/channels')
+    store.channels = response.data.map(ch => ({
+      id: ch.id,
+      name: ch.channelName,
+      type: ch.isPrivate ? 'private' : 'public',
+      adminId: ch.adminId,
+      isInvited: false
+    }))
+
+    if (store.channels.length > 0 && !store.currentChannel?.name) {
+      store.currentChannel = store.channels[0]
+      await loadChannelUsers(store.channels[0].name)
+    }
+  } catch (error) {
+    console.error('Chyba pri načítaní kanálov:', error)
+  }
+})
+
+onUnmounted(() => {
+  socket.off('connect', identify)
+  socket.off('presence:all', onPresenceAll)
+  socket.off('presence:update', onPresenceUpdate)
+})
+
+// Ulozenie stavu pre notifikacie
+watch(
+  () => store.settings.notifyOnlyMentions,
+  (v) => localStorage.setItem('notify_only_mentions', String(v))
+)
+
+// Pripojenie do kanala cez API
+async function handleAddChannel(channel) {
+  try {
+    const response = await api.post('/channels/join', {
+      channelName: channel.name,
+      isPrivate: channel.isPrivate
+    })
+
+    const exists = store.channels.find(c => c.name === channel.name)
+    if (!exists) {
+      const newChannel = {
+        id: response.data.channel.id,
+        name: response.data.channel.channelName,
+        type: response.data.channel.isPrivate ? 'private' : 'public',
+        adminId: response.data.channel.adminId,
+        isInvited: false
+      }
+      store.channels.push(newChannel)
+      store.currentChannel = newChannel
+    } else {
+      store.currentChannel = exists
+    }
+
+    await loadChannelUsers(channel.name)
+    $q.notify({ type: 'positive', message: response.data.message })
+  } catch (error) {
+    $q.notify({ type: 'negative', message: error.response?.data?.message || 'Chyba pri vytváraní kanála' })
+  }
+}
+
+// Nacitanie pouzivatelov pre aktualny kanal
+async function loadChannelUsers(channelName) {
+  try {
+    const response = await api.get(`/channels/${channelName}/users`)
+    channelUsers.value = response.data.map(user => ({
+      id: user.id,
+      nick: user.nickname,
+      isAdmin: user.id === store.currentChannel.adminId
+    }))
+  } catch (error) {
+    console.error('Nepodarilo sa načítať používateľov:', error)
+    channelUsers.value = []
+  }
+}
+
+function selectChannel(channel) {
+  store.currentChannel = channel
+  loadChannelUsers(channel.name)
+}
+
+// Opustenie kanala
+async function leaveChannel(channel) {
+  try {
+    await api.post('/channels/cancel', { channelName: channel.name })
+
+    const index = store.channels.findIndex(c => c.name === channel.name)
+    if (index !== -1) {
+      store.channels.splice(index, 1)
+      if (store.currentChannel.name === channel.name && store.channels.length > 0) {
+        selectChannel(store.channels[0])
+      }
+    }
+    $q.notify({ type: 'positive', message: `Opustili ste kanál ${channel.name}` })
+  } catch (error) {
+    $q.notify({ type: 'negative', message: error.response?.data?.message || 'Chyba pri opúšťaní kanála' })
+  }
+}
+
+// Zobrazovanie stavov pre UI
+function toggleLeftDrawer() { leftDrawerOpen.value = !leftDrawerOpen.value }
+function toggleRightDrawer() { rightDrawerOpen.value = !rightDrawerOpen.value }
+
 const statusColor = computed(() => {
   if (store.currentUser.status === 'online') return 'positive'
   if (store.currentUser.status === 'dnd') return 'negative'
@@ -180,48 +314,36 @@ const statusColor = computed(() => {
 
 function setStatus(status) {
   store.currentUser.status = status
+  localStorage.setItem('user_status', status)
+  socket.emit('setStatus', status)
 }
 
-// Zotriedenie kanálov - tie s "isInvited" idú úplne hore
 const sortedChannels = computed(() => {
   return [...store.channels].sort((a, b) => {
-    if (a.isInvited === b.isInvited) return 0;
-    return a.isInvited ? -1 : 1; 
+    if (a.isInvited === b.isInvited) return 0
+    return a.isInvited ? -1 : 1
   })
 })
 
-function selectChannel(channel) {
-  store.currentChannel = channel
-}
-
-// Funkcia na opustenie kanála
-function leaveChannel(channel) {
-  const index = store.channels.findIndex(c => c.name === channel.name)
-  if (index !== -1) {
-    store.channels.splice(index, 1)
-    if (store.currentChannel.name === channel.name && store.channels.length > 0) {
-      store.currentChannel = store.channels[0]
-    }
+async function logout() {
+  try {
+    await authStore.logout()
+  } catch (error) {
+    console.error('Chyba pri odhlasovaní:', error)
+  } finally {
+    router.push({ name: 'login' })
   }
 }
 
-const channelUsers = ref([
-  { nick: 'FeroMaster', status: 'online', isAdmin: false },
-  { nick: 'JanoAdmin', status: 'online', isAdmin: true },
-  { nick: 'ZuzkaDND', status: 'dnd', isAdmin: false },
-  { nick: 'MisoOffline', status: 'offline', isAdmin: false },
-])
-
-const createDialog = ref(false)
-
-function logout() {
-  document.cookie = 'auth_session=; path=/; max-age=0; SameSite=Lax'
-  router.push({ name: 'login' })
-}
-
-function handleAddChannel(channel) {
-  store.channels.push(
-    { name: channel.name, type: channel.isPrivate ? 'private' : 'public', isInvited: false }
-  )
+async function enableNotifications() {
+  if (!('Notification' in window)) {
+    $q.notify({ type: 'negative', message: 'Prehliadač nepodporuje notifikácie.' })
+    return
+  }
+  const result = await Notification.requestPermission()
+  $q.notify({
+    type: result === 'granted' ? 'positive' : 'warning',
+    message: result === 'granted' ? 'Notifikácie sú zapnuté.' : 'Notifikácie nie sú povolené.',
+  })
 }
 </script>

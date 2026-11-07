@@ -1,10 +1,15 @@
 <script setup lang="ts">
+/* eslint-disable no-unused-vars */
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useQuasar } from 'quasar'
+import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
 const { t } = useI18n()
+const $q = useQuasar()
+const authStore = useAuthStore()
 
 const email = ref('')
 const password = ref('')
@@ -30,9 +35,14 @@ const passwordRules = [
     t('validation.passwordSpecial'),
 ]
 
-const onSubmit = () => {
-  document.cookie = 'auth_session=simulated; path=/; max-age=3600; SameSite=Lax'
-  router.push({ name: 'home' })
+const onSubmit = async () => {
+  try {
+    await authStore.login(email.value, password.value)
+    $q.notify({ type: 'positive', message: 'Úspešne prihlásený' })
+    router.push({ name: 'home' })
+  } catch (error) {
+    $q.notify({ type: 'negative', message: 'Nesprávny email alebo heslo' })
+  }
 }
 </script>
 
