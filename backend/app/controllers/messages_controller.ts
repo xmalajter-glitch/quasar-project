@@ -6,7 +6,7 @@ import Ws from '#services/ws'
 export default class MessagesController {
   
   // Ziskanie vsetkych sprav pre dany kanal
-  async index({ params, auth, response }: HttpContext) {
+  async index({ params, request, auth, response }: HttpContext) {
     const currentUser = auth.use('api').user!
     const channelId = params.channel_id
 
@@ -21,15 +21,25 @@ export default class MessagesController {
       return response.forbidden({ message: 'Nemáte prístup k správam tohto kanála.' })
     }
 
-    // Nacitanie sprav od najstarsich po najnovsie
-    const messages = await Message.query()
+    // Strankovanie pre infinite scroll: ?limit=30&before=<id najstarsej nacitanej spravy>
+    const limit = Math.min(Math.max(Number(request.input('limit')) || 30, 1), 100)
+    const before = Number(request.input('before')) || null
+
+    // Nacitame jednu stranku od najnovsich, starsie nez "before"
+    const query = Message.query()
       .where('channelId', channelId)
       .preload('user', (userQuery) => {
         userQuery.select('id', 'nickname')
       })
-      .orderBy('createdAt', 'asc')
+      .orderBy('id', 'desc')
+      .limit(limit)
 
-    return response.ok(messages)
+    if (before) query.where('id', '<', before)
+
+    const messages = await query
+
+    // Klientovi ich vratime od najstarsich po najnovsie
+    return response.ok(messages.reverse())
   }
 
   // Ulozenie novej spravy do databazy
