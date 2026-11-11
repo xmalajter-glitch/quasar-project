@@ -15,7 +15,13 @@ Ws.io?.on('connection', (socket) => {
   // Klient po pripojení povie, kto je a v akom je stave
   socket.on('identify', ({ userId, status }) => {
     if (!userId) return
+    // Osobna miestnost pouzivatela - pre udalosti urcene iba jemu (napr. pozvanka).
+    // Ak sa na tom istom sockete prihlasi iny pouzivatel, staru miestnost opustime.
+    if (socket.data.userId && socket.data.userId !== userId) {
+      socket.leave(`user_${socket.data.userId}`)
+    }
     socket.data.userId = userId
+    socket.join(`user_${userId}`)
     connections.set(userId, (connections.get(userId) ?? 0) + 1)
     presence.set(userId, status || 'online')
 
