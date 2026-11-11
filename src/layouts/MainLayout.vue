@@ -127,7 +127,7 @@
     </q-drawer>
 
     <!-- Zoznam pouzivatelov v danom kanali -->
-    <q-drawer v-model="rightDrawerOpen" side="right" bordered :width="250">
+    <q-drawer v-model="store.ui.rightDrawerOpen" side="right" bordered :width="250">
       <q-list>
         <q-item-label header>Členovia (#{{ store.currentChannel.name }})</q-item-label>
         <q-item v-for="user in channelUsers" :key="user.nick" clickable v-ripple>
@@ -162,7 +162,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../boot/axios'
-import { store } from '../store.js'
+import { store, removeChannel, joinChannel } from '../store.js'
 import { useAuthStore } from '../stores/auth'
 import { socket } from '../socket.js'
 import CreateChannelDialog from '@/components/CreateChannelDialog.vue'
@@ -173,7 +173,6 @@ const $q = useQuasar()
 const authStore = useAuthStore()
 
 const leftDrawerOpen = ref(false)
-const rightDrawerOpen = ref(false)
 const createDialog = ref(false)
 const channelUsers = ref([])
 
@@ -196,11 +195,72 @@ function onPresenceUpdate({ userId, status }) {
   store.presence[userId] = status
 }
 
+// Kanal zrusil spravca -> odstranime ho zo zoznamu
+function onChannelDeleted({ channelId, channelName, deletedBy }) {
+  const removed = removeChannel(c => Number(c.id) === Number(channelId))
+  if (removed && deletedBy !== authStore.user?.id) {
+    $q.notify({ type: 'warning', message: `Kanál ${channelName} bol zrušený správcom.` })
+  }
+}
+
+// Zmena clenov otvoreneho kanala (join, invite, kick, cancel) -> obnovime zoznam clenov
+function onMembersChanged({ channelId }) {
+  if (Number(channelId) === Number(store.currentChannel?.id)) store.ui.membersRefresh++
+}
+
+// Trvale vyhodenie z kanala -> kanal hned zmizne zo zoznamu
+function onChannelBanned({ channelId, channelName, bannedBy }) {
+  removeChannel(c => Number(c.id) === Number(channelId))
+  $q.notify({
+    type: 'negative',
+    icon: 'block',
+    message: bannedBy
+      ? `Správca ${bannedBy} vás natrvalo vyhodil z kanála ${channelName}.`
+      : `Členovia vás vyhodili z kanála ${channelName}. Máte trvalý ban.`
+  })
+}
+
+// Spravca odobral pouzivatela zo sukromneho kanala (/revoke) -> kanal zmizne zo zoznamu
+function onChannelRevoked({ channelId, channelName, revokedBy }) {
+  removeChannel(c => Number(c.id) === Number(channelId))
+  $q.notify({
+    type: 'warning',
+    icon: 'person_remove',
+    message: `Správca ${revokedBy} vás odobral z kanála ${channelName}.`
+  })
+}
+
+// Pozvanka do kanala -> kanal sa hned zobrazi zvyrazneny na vrchu zoznamu
+function onChannelInvited({ channel, invitedBy }) {
+  const existing = store.channels.find(c => Number(c.id) === Number(channel.id))
+  if (existing) {
+    existing.isInvited = true
+  } else {
+    store.channels.push({
+      id: channel.id,
+      name: channel.channelName,
+      type: channel.isPrivate ? 'private' : 'public',
+      adminId: channel.adminId,
+      isInvited: true
+    })
+  }
+  $q.notify({
+    type: 'info',
+    icon: 'mail',
+    message: `${invitedBy} vás pozval do kanála ${channel.channelName}.`
+  })
+}
+
 // Nacitanie kanalov pri spusteni
 onMounted(async () => {
+  socket.on('channel:invited', onChannelInvited)
+  socket.on('channel:banned', onChannelBanned)
+  socket.on('channel:revoked', onChannelRevoked)
+  socket.on('channel:membersChanged', onMembersChanged)
   socket.on('connect', identify)
   socket.on('presence:all', onPresenceAll)
   socket.on('presence:update', onPresenceUpdate)
+  socket.on('channel:deleted', onChannelDeleted)
   if (socket.connected) identify()
 
   try {
@@ -215,7 +275,6 @@ onMounted(async () => {
 
     if (store.channels.length > 0 && !store.currentChannel?.name) {
       store.currentChannel = store.channels[0]
-      await loadChannelUsers(store.channels[0].name)
     }
   } catch (error) {
     console.error('Chyba pri načítaní kanálov:', error)
@@ -226,7 +285,19 @@ onUnmounted(() => {
   socket.off('connect', identify)
   socket.off('presence:all', onPresenceAll)
   socket.off('presence:update', onPresenceUpdate)
+  socket.off('channel:deleted', onChannelDeleted)
+  socket.off('channel:invited', onChannelInvited)
+  socket.off('channel:banned', onChannelBanned)
+  socket.off('channel:revoked', onChannelRevoked)
+  socket.off('channel:membersChanged', onMembersChanged)
 })
+
+// Zoznam clenov sa nacita pri zmene kanala, otvoreni panela a prikaze /list
+watch(
+  () => [store.currentChannel?.name, store.ui.rightDrawerOpen, store.ui.membersRefresh],
+  () => loadChannelUsers(store.currentChannel?.name),
+  { immediate: true }
+)
 
 // Ulozenie stavu pre notifikacie
 watch(
@@ -237,28 +308,8 @@ watch(
 // Pripojenie do kanala cez API
 async function handleAddChannel(channel) {
   try {
-    const response = await api.post('/channels/join', {
-      channelName: channel.name,
-      isPrivate: channel.isPrivate
-    })
-
-    const exists = store.channels.find(c => c.name === channel.name)
-    if (!exists) {
-      const newChannel = {
-        id: response.data.channel.id,
-        name: response.data.channel.channelName,
-        type: response.data.channel.isPrivate ? 'private' : 'public',
-        adminId: response.data.channel.adminId,
-        isInvited: false
-      }
-      store.channels.push(newChannel)
-      store.currentChannel = newChannel
-    } else {
-      store.currentChannel = exists
-    }
-
-    await loadChannelUsers(channel.name)
-    $q.notify({ type: 'positive', message: response.data.message })
+    const message = await joinChannel(channel.name, channel.isPrivate)
+    $q.notify({ type: 'positive', message })
   } catch (error) {
     $q.notify({ type: 'negative', message: error.response?.data?.message || 'Chyba pri vytváraní kanála' })
   }
@@ -266,6 +317,10 @@ async function handleAddChannel(channel) {
 
 // Nacitanie pouzivatelov pre aktualny kanal
 async function loadChannelUsers(channelName) {
+  if (!channelName) {
+    channelUsers.value = []
+    return
+  }
   try {
     const response = await api.get(`/channels/${channelName}/users`)
     channelUsers.value = response.data.map(user => ({
@@ -280,23 +335,16 @@ async function loadChannelUsers(channelName) {
 }
 
 function selectChannel(channel) {
+  channel.isInvited = false // otvorenim kanala sa zvyraznenie pozvanky zrusi
   store.currentChannel = channel
-  loadChannelUsers(channel.name)
 }
 
 // Opustenie kanala
 async function leaveChannel(channel) {
   try {
-    await api.post('/channels/cancel', { channelName: channel.name })
-
-    const index = store.channels.findIndex(c => c.name === channel.name)
-    if (index !== -1) {
-      store.channels.splice(index, 1)
-      if (store.currentChannel.name === channel.name && store.channels.length > 0) {
-        selectChannel(store.channels[0])
-      }
-    }
-    $q.notify({ type: 'positive', message: `Opustili ste kanál ${channel.name}` })
+    const response = await api.post('/channels/cancel', { channelName: channel.name })
+    removeChannel(c => c.name === channel.name)
+    $q.notify({ type: 'positive', message: response.data?.message || `Opustili ste kanál ${channel.name}` })
   } catch (error) {
     $q.notify({ type: 'negative', message: error.response?.data?.message || 'Chyba pri opúšťaní kanála' })
   }
@@ -304,7 +352,7 @@ async function leaveChannel(channel) {
 
 // Zobrazovanie stavov pre UI
 function toggleLeftDrawer() { leftDrawerOpen.value = !leftDrawerOpen.value }
-function toggleRightDrawer() { rightDrawerOpen.value = !rightDrawerOpen.value }
+function toggleRightDrawer() { store.ui.rightDrawerOpen = !store.ui.rightDrawerOpen }
 
 const statusColor = computed(() => {
   if (store.currentUser.status === 'online') return 'positive'
