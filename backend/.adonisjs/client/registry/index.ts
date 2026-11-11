@@ -50,6 +50,12 @@ const routes = {
     tokens: [[0,"api"],[0,"v1"],[0,"channels"],[0,"invite"]],
     types: placeholder as Registry['channels.channels.invite']['types'],
   },
+  'channels.channels.revoke': {
+    methods: ["POST"],
+    pattern: '/api/v1/channels/revoke',
+    tokens: [[0,"api"],[0,"v1"],[0,"channels"],[0,"revoke"]],
+    types: placeholder as Registry['channels.channels.revoke']['types'],
+  },
   'channels.channels.kick': {
     methods: ["POST"],
     pattern: '/api/v1/channels/kick',

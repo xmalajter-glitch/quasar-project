@@ -50,6 +50,7 @@ router
         // POST /api/v1/channels/join -> pripojí do kanála alebo ho vytvorí
         router.post('/join', [ChannelsController, 'join']) 
         router.post('/invite', [ChannelsController, 'invite'])
+        router.post('/revoke', [ChannelsController, 'revoke'])
         router.post('/kick', [ChannelsController, 'kick'])
         router.post('/quit', [ChannelsController, 'quit'])
         router.post('/cancel', [ChannelsController, 'cancel'])

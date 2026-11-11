@@ -2,6 +2,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import Channel from '#models/channel'
 import ChannelUser from '#models/channel_user'
 import User from '#models/user'
+import Ws from '#services/ws'
 
 export default class ChannelsController {
   
@@ -63,6 +64,7 @@ export default class ChannelsController {
       // Ak v kanali bol a opustil ho zmenime status z left na active
       existingMembership.status = 'active'
       await existingMembership.save()
+      this.notifyMembersChanged(channel.id)
       return response.ok({ message: `Znovu ste sa pripojili do kanála ${channelName}.`, channel })
     }
 
@@ -70,6 +72,7 @@ export default class ChannelsController {
     await channel.related('members').attach({
       [user.id]: { status: 'active' }
     })
+    this.notifyMembersChanged(channel.id)
 
     return response.ok({ message: `Úspešne ste sa pripojili do kanála ${channelName}.`, channel })
   }
@@ -121,6 +124,7 @@ export default class ChannelsController {
           targetMembership.status = 'active'
           targetMembership.kickCount = 0
           await targetMembership.save()
+          this.notifyInvited(channel, targetUser.id, currentUser.nickname)
           return response.ok({ message: `Používateľovi ${nickname} bol zrušený ban a obnovený prístup.` })
         }
         return response.forbidden({ message: 'Tento používateľ má trvalý ban. Iba správca mu môže obnoviť prístup.' })
@@ -129,6 +133,7 @@ export default class ChannelsController {
       // Ak predtym opustil kanal, tak ho znovu aktivujeme
       targetMembership.status = 'active'
       await targetMembership.save()
+      this.notifyInvited(channel, targetUser.id, currentUser.nickname)
       return response.ok({ message: `Používateľ ${nickname} bol úspešne pozvaný späť do kanála.` })
     }
 
@@ -139,7 +144,73 @@ export default class ChannelsController {
       status: 'active'
     })
 
+    this.notifyInvited(channel, targetUser.id, currentUser.nickname)
     return response.ok({ message: `Používateľ ${nickname} bol pozvaný do kanála ${channelName}.` })
+  }
+
+  // Oznamenie vsetkym v kanali, ze sa zmenil zoznam clenov (join, invite, kick, cancel)
+  private notifyMembersChanged(channelId: number) {
+    Ws.io?.to(`channel_${channelId}`).emit('channel:membersChanged', { channelId })
+  }
+
+  // Oznamenie pozvanemu pouzivatelovi, aby sa mu kanal hned zobrazil v zozname
+  private notifyInvited(channel: Channel, targetUserId: number, invitedBy: string) {
+    this.notifyMembersChanged(channel.id)
+    Ws.io?.to(`user_${targetUserId}`).emit('channel:invited', {
+      channel: {
+        id: channel.id,
+        channelName: channel.channelName,
+        isPrivate: channel.isPrivate,
+        adminId: channel.adminId,
+      },
+      invitedBy,
+    })
+  }
+
+  // Spracovanie prikazu revoke - spravca odoberie clena zo sukromneho kanala (bez banu)
+  async revoke({ request, auth, response }: HttpContext) {
+    const currentUser = auth.use('api').user!
+    const { channelName, nickname } = request.only(['channelName', 'nickname'])
+
+    const channel = await Channel.findBy('channelName', channelName)
+    if (!channel) return response.notFound({ message: 'Kanál neexistuje.' })
+
+    if (!channel.isPrivate) {
+      return response.badRequest({ message: 'Príkaz /revoke je určený pre súkromné kanály. Vo verejnom kanáli použite /kick.' })
+    }
+    if (channel.adminId !== currentUser.id) {
+      return response.forbidden({ message: 'Odoberať používateľov zo súkromného kanála môže iba správca.' })
+    }
+
+    const targetUser = await User.findBy('nickname', nickname)
+    if (!targetUser) return response.notFound({ message: 'Používateľ s týmto nickom neexistuje.' })
+    if (targetUser.id === currentUser.id) {
+      return response.badRequest({ message: 'Nemôžete odobrať seba samého. Na zrušenie kanála použite /quit.' })
+    }
+
+    const targetMembership = await ChannelUser.query()
+      .where('channelId', channel.id)
+      .where('userId', targetUser.id)
+      .first()
+
+    if (!targetMembership || targetMembership.status !== 'active') {
+      return response.badRequest({ message: 'Tento používateľ nie je aktívnym členom kanála.' })
+    }
+
+    // Nie je to ban - spravca ho moze kedykolvek znovu pozvat cez /invite
+    targetMembership.status = 'left'
+    await targetMembership.save()
+
+    const userRoom = `user_${targetUser.id}`
+    Ws.io?.to(userRoom).emit('channel:revoked', {
+      channelId: channel.id,
+      channelName: channel.channelName,
+      revokedBy: currentUser.nickname,
+    })
+    Ws.io?.in(userRoom).socketsLeave(`channel_${channel.id}`)
+    this.notifyMembersChanged(channel.id)
+
+    return response.ok({ message: `Používateľ ${nickname} bol odobratý z kanála ${channelName}.` })
   }
 
   // Spracovanie prikazu kick
@@ -185,6 +256,7 @@ export default class ChannelsController {
     if (isCurrentUserAdmin) {
       targetMembership.status = 'banned'
       await targetMembership.save()
+      this.notifyBanned(channel, targetUser.id, currentUser.nickname)
       return response.ok({ message: `Správca natrvalo vyhodil používateľa ${nickname} z kanála.` })
     }
 
@@ -194,11 +266,27 @@ export default class ChannelsController {
     if (targetMembership.kickCount >= 3) {
       targetMembership.status = 'banned'
       await targetMembership.save()
+      this.notifyBanned(channel, targetUser.id, null)
       return response.ok({ message: `Používateľ ${nickname} dostal 3 hlasy a má trvalý ban.` })
     }
 
     await targetMembership.save()
     return response.ok({ message: `Hlasovali ste za vyhodenie. Používateľ ${nickname} má momentálne ${targetMembership.kickCount}/3 hlasov.` })
+  }
+
+  // Oznamenie vyhodenemu pouzivatelovi, aby mu kanal hned zmizol zo zoznamu
+  // bannedBy = nick spravcu, alebo null ak ban vznikol hlasovanim clenov
+  private notifyBanned(channel: Channel, targetUserId: number, bannedBy: string | null) {
+    const userRoom = `user_${targetUserId}`
+
+    Ws.io?.to(userRoom).emit('channel:banned', {
+      channelId: channel.id,
+      channelName: channel.channelName,
+      bannedBy,
+    })
+    // Sockety vyhodeneho pouzivatela uz nesmu dostavat spravy z kanala
+    Ws.io?.in(userRoom).socketsLeave(`channel_${channel.id}`)
+    this.notifyMembersChanged(channel.id)
   }
 
   // Spracovanie prikazu quit
@@ -214,10 +302,21 @@ export default class ChannelsController {
       return response.forbidden({ message: 'Kanál môže zrušiť iba jeho správca.' })
     }
 
-    // Vymazanie kanala, vsetkych sprav a clenstiev sa vymaze automaticky vdaka ON DELETE CASCADE
-    await channel.delete()
+    await this.deleteChannel(channel, currentUser.id)
 
     return response.ok({ message: `Kanál ${channelName} bol úspešne zrušený a vymazaný.` })
+  }
+
+  // Vymazanie kanala, vsetky spravy a clenstva sa vymazu automaticky vdaka ON DELETE CASCADE
+  private async deleteChannel(channel: Channel, deletedBy: number) {
+    await channel.delete()
+
+    // Oznamenie ostatnym clenom, aby si kanal odstranili zo zoznamu
+    Ws.io?.to(`channel_${channel.id}`).emit('channel:deleted', {
+      channelId: channel.id,
+      channelName: channel.channelName,
+      deletedBy,
+    })
   }
 
   // Spracovanie prikazu cancel
@@ -228,9 +327,13 @@ export default class ChannelsController {
     const channel = await Channel.findBy('channelName', channelName)
     if (!channel) return response.notFound({ message: 'Kanál neexistuje.' })
 
-    // Spravca musi kanal zrusit, ak chce odist
+    // Ak kanal opusti spravca, kanal zanika
     if (channel.adminId === currentUser.id) {
-      return response.badRequest({ message: 'Ste správca kanála. Ak ho chcete opustiť, použite príkaz /quit na jeho zrušenie.' })
+      await this.deleteChannel(channel, currentUser.id)
+      return response.ok({
+        message: `Opustili ste kanál ${channelName}. Keďže ste boli správca, kanál zanikol.`,
+        channelDeleted: true,
+      })
     }
 
     // Najdenie clenstva uzivatela v kanali
@@ -246,19 +349,34 @@ export default class ChannelsController {
     // Zmenenie stavu uzivatela na lef
     membership.status = 'left'
     await membership.save()
+    this.notifyMembersChanged(channel.id)
 
     return response.ok({ message: `Úspešne ste opustili kanál ${channelName}.` })
   }
 
   // Ziskanie zoznamu vsetkych clenov v danom kanali
-  async channelUsers({ request, response }: HttpContext) {
+  async channelUsers({ request, auth, response }: HttpContext) {
+    const currentUser = auth.use('api').user!
     const channelName = request.param('name')
-    
+
     const channel = await Channel.findBy('channelName', channelName)
     if (!channel) return response.notFound({ message: 'Kanál neexistuje' })
 
+    // Zoznam clenov si moze pozriet iba aktivny clen kanala
+    const isMember = await ChannelUser.query()
+      .where('channelId', channel.id)
+      .where('userId', currentUser.id)
+      .where('status', 'active')
+      .first()
+
+    if (!isMember) {
+      return response.forbidden({ message: 'Zoznam členov môže vidieť iba člen kanála.' })
+    }
+
     // Nacitanie vsetkych clenov kanala, ktory maju status active
-    await channel.load('members')
+    await channel.load('members', (query) => {
+      query.wherePivot('status', 'active')
+    })
 
     const users = channel.members.map(user => ({
       id: user.id,

@@ -11,6 +11,7 @@ export type ScannedRoutes = {
     'channels.channels.index': { paramsTuple?: []; params?: {} }
     'channels.channels.join': { paramsTuple?: []; params?: {} }
     'channels.channels.invite': { paramsTuple?: []; params?: {} }
+    'channels.channels.revoke': { paramsTuple?: []; params?: {} }
     'channels.channels.kick': { paramsTuple?: []; params?: {} }
     'channels.channels.quit': { paramsTuple?: []; params?: {} }
     'channels.channels.cancel': { paramsTuple?: []; params?: {} }
@@ -36,6 +37,7 @@ export type ScannedRoutes = {
     'profile.access_tokens.destroy': { paramsTuple?: []; params?: {} }
     'channels.channels.join': { paramsTuple?: []; params?: {} }
     'channels.channels.invite': { paramsTuple?: []; params?: {} }
+    'channels.channels.revoke': { paramsTuple?: []; params?: {} }
     'channels.channels.kick': { paramsTuple?: []; params?: {} }
     'channels.channels.quit': { paramsTuple?: []; params?: {} }
     'channels.channels.cancel': { paramsTuple?: []; params?: {} }
