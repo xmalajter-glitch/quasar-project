@@ -1,15 +1,36 @@
 <template>
   <q-page class="flex column" style="height: calc(100vh - 50px);">
     <div class="q-pa-md col overflow-auto" id="chat-area">
-      <q-chat-message
-        v-for="msg in messages"
-        :key="msg.id"
-        :name="msg.sender"
-        :text="[msg.text]"
-        :sent="msg.sender === authStore.user?.nickname"
-        :bg-color="msg.isMention ? 'amber-3' : (msg.sender === authStore.user?.nickname ? 'blue-2' : 'grey-2')"
-        :stamp="msg.time"
-      />
+      <!-- Starsie spravy sa docitavaju po strankach pri scrollovani nahor -->
+      <q-infinite-scroll
+        reverse
+        :offset="200"
+        :disable="!hasMore || loadingInitial"
+        @load="loadOlder"
+      >
+        <template #loading>
+          <div class="row justify-center q-my-sm">
+            <q-spinner-dots color="primary" size="30px" />
+          </div>
+        </template>
+
+        <div
+          v-if="!hasMore && !loadingInitial && messages.length > 0"
+          class="text-center text-caption text-grey q-mb-sm"
+        >
+          Začiatok histórie kanála
+        </div>
+
+        <q-chat-message
+          v-for="msg in messages"
+          :key="msg.id"
+          :name="msg.sender"
+          :text="[msg.text]"
+          :sent="msg.sender === authStore.user?.nickname"
+          :bg-color="msg.isMention ? 'amber-3' : (msg.sender === authStore.user?.nickname ? 'blue-2' : 'grey-2')"
+          :stamp="msg.time"
+        />
+      </q-infinite-scroll>
     </div>
 
     <!-- Fixny riadok na pisanie -->
@@ -53,9 +74,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, onUnmounted } from 'vue'
+import { ref, onMounted, watch, onUnmounted, nextTick } from 'vue'
 import { useQuasar } from 'quasar'
-import { store } from '../store.js'
+import { store, removeChannel, joinChannel } from '../store.js'
 import { api } from '../boot/axios'
 import { useAuthStore } from '../stores/auth'
 import { socket } from '../socket.js'
@@ -128,15 +149,59 @@ function maybeNotify(msg) {
 }
 
 // Historia sprav
+const PAGE_SIZE = 30
+const hasMore = ref(false) // existuju este starsie spravy?
+const loadingInitial = ref(false)
+
+// Prva stranka (najnovsie spravy) pri otvoreni kanala
 const fetchMessages = async () => {
-  if (!store.currentChannel?.id) return
+  const channelId = store.currentChannel?.id
+  messages.value = []
+  hasMore.value = false
+  if (!channelId) return
+
+  loadingInitial.value = true
   try {
-    const response = await api.get(`/channels/${store.currentChannel.id}/messages`)
+    const response = await api.get(`/channels/${channelId}/messages`, {
+      params: { limit: PAGE_SIZE },
+    })
+    if (channelId !== store.currentChannel?.id) return // medzitym sa zmenil kanal
+
     messages.value = response.data.map(mapMessage)
-    scrollToBottom()
+    hasMore.value = response.data.length === PAGE_SIZE
+
+    await nextTick()
+    const chatArea = document.getElementById('chat-area')
+    if (chatArea) chatArea.scrollTop = chatArea.scrollHeight
   } catch (error) {
     console.error('Failed to fetch messages:', error)
+  } finally {
+    if (channelId === store.currentChannel?.id) loadingInitial.value = false
   }
+}
+
+// Dalsia stranka starsich sprav - vola q-infinite-scroll pri doscrollovani nahor
+async function loadOlder(_index, done) {
+  const channelId = store.currentChannel?.id
+  const oldest = messages.value[0]
+  if (!channelId || !oldest) {
+    done()
+    return
+  }
+
+  try {
+    const response = await api.get(`/channels/${channelId}/messages`, {
+      params: { limit: PAGE_SIZE, before: oldest.id },
+    })
+    if (channelId === store.currentChannel?.id) {
+      messages.value.unshift(...response.data.map(mapMessage))
+      hasMore.value = response.data.length === PAGE_SIZE
+    }
+  } catch (error) {
+    console.error('Failed to fetch older messages:', error)
+    hasMore.value = false // pri chybe neopakujeme poziadavku donekonecna
+  }
+  done()
 }
 
 // Socket
@@ -205,43 +270,49 @@ async function sendMessage() {
 }
 
 async function handleCommand(cmdText) {
-  const args = cmdText.split(' ')
+  const args = cmdText.split(/\s+/)
   const command = args[0]
   const targetName = args[1]
 
   try {
     switch (command) {
-      case '/join':
+      case '/join': {
         if (!targetName) throw new Error('Chýba názov kanála')
-        $q.notify({ type: 'info', message: `Prebieha pripájanie k ${targetName}...` })
+        if (args[2] && args[2] !== 'private') {
+          throw new Error('Použitie: /join channelName [private]')
+        }
+        const message = await joinChannel(targetName, args[2] === 'private')
+        $q.notify({ type: 'positive', message })
         break
+      }
       case '/cancel':
-      case '/quit':
-        if (!store.currentChannel?.name) return
-        await api.post(`/channels/${command === '/quit' ? 'quit' : 'cancel'}`, {
-          channelName: store.currentChannel.name,
+      case '/quit': {
+        const channelName = store.currentChannel?.name
+        if (!channelName) throw new Error('Nie je vybraný žiadny kanál')
+        const response = await api.post(`/channels/${command === '/quit' ? 'quit' : 'cancel'}`, {
+          channelName,
         })
-        $q.notify({ type: 'warning', message: 'Opustili ste kanál.' })
+        removeChannel((c) => c.name === channelName)
+        $q.notify({ type: 'warning', message: response.data?.message || 'Opustili ste kanál.' })
         break
+      }
       case '/list':
-        $q.notify({ type: 'info', message: 'Otvorí sa panel používateľov.' })
+        if (!store.currentChannel?.name) throw new Error('Nie je vybraný žiadny kanál')
+        store.ui.rightDrawerOpen = true
+        store.ui.membersRefresh++
         break
       case '/kick':
+      case '/revoke':
+      case '/invite': {
         if (!targetName) throw new Error('Chýba nick používateľa')
-        await api.post('/channels/kick', {
+        const response = await api.post(`/channels/${command.slice(1)}`, {
           channelName: store.currentChannel.name,
           nickname: targetName,
         })
-        $q.notify({ type: 'positive', message: `Hlasovali ste za vyhodenie ${targetName}.` })
+        store.ui.membersRefresh++ // zoznam clenov sa zmenil
+        $q.notify({ type: 'positive', message: response.data?.message || 'Príkaz vykonaný.' })
         break
-      case '/invite':
-        if (!targetName) throw new Error('Chýba nick používateľa')
-        await api.post('/channels/invite', {
-          channelName: store.currentChannel.name,
-          nickname: targetName,
-        })
-        $q.notify({ type: 'positive', message: `Pozvánka pre ${targetName} odoslaná.` })
-        break
+      }
       default:
         $q.notify({ type: 'negative', message: `Neznámy príkaz: ${command}` })
     }
