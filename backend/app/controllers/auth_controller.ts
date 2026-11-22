@@ -16,12 +16,12 @@ export default class AuthController {
       const token = await User.accessTokens.create(user)
 
       return response.created({
-        message: 'Registrácia bola úspešná',
+        message: 'Registration successful',
         user: user,
         token: token.value!.release(), // Odoslanie tokenu klientovi
       })
     } catch (error) {
-      return response.badRequest({ message: 'Chyba pri registrácii, email alebo nickname už možno existuje.' })
+      return response.badRequest({ message: 'Registration failed, the email or nickname may already exist.' })
     }
   }
 
@@ -37,12 +37,12 @@ export default class AuthController {
       const token = await User.accessTokens.create(user)
 
       return response.ok({
-        message: 'Úspešné prihlásenie',
+        message: 'Logged in successfully',
         user: user,
         token: token.value!.release(),
       })
     } catch (error) {
-      return response.unauthorized({ message: 'Nesprávny email alebo heslo' })
+      return response.unauthorized({ message: 'Wrong email or password' })
     }
   }
 
@@ -56,6 +56,6 @@ export default class AuthController {
     await User.accessTokens.delete(user, user.currentAccessToken.identifier)
   }
 
-  return response.ok({ message: 'Úspešne odhlásený' })
+  return response.ok({ message: 'Logged out successfully' })
 }
 }

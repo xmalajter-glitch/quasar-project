@@ -39,12 +39,12 @@ export default class ChannelsController {
         [user.id]: { status: 'active' }
       })
 
-      return response.created({ message: `Kanál ${channelName} bol vytvorený a pripojili ste sa.`, channel })
+      return response.created({ message: `Channel ${channelName} was created and you joined it.`, channel })
     }
 
     // Ak kanal existuje, overime ci je sukromny
     if (channel.isPrivate) {
-      return response.forbidden({ message: 'Toto je súkromný kanál. Musíte byť pozvaný správcom.' })
+      return response.forbidden({ message: 'This is a private channel. You must be invited by its admin.' })
     }
 
     // Overnie ci uzivatel, nema na dany kanal status bannned
@@ -55,17 +55,17 @@ export default class ChannelsController {
 
     if (existingMembership) {
       if (existingMembership.status === 'banned') {
-        return response.forbidden({ message: 'Máte trvalý ban pre tento kanál.' })
+        return response.forbidden({ message: 'You are permanently banned from this channel.' })
       }
       if (existingMembership.status === 'active') {
-        return response.badRequest({ message: 'Už ste členom tohto kanála.' })
+        return response.badRequest({ message: 'You are already a member of this channel.' })
       }
       
       // Ak v kanali bol a opustil ho zmenime status z left na active
       existingMembership.status = 'active'
       await existingMembership.save()
       this.notifyMembersChanged(channel.id)
-      return response.ok({ message: `Znovu ste sa pripojili do kanála ${channelName}.`, channel })
+      return response.ok({ message: `You rejoined channel ${channelName}.`, channel })
     }
 
     // Ak v nom este nebol, pridame ho
@@ -74,7 +74,7 @@ export default class ChannelsController {
     })
     this.notifyMembersChanged(channel.id)
 
-    return response.ok({ message: `Úspešne ste sa pripojili do kanála ${channelName}.`, channel })
+    return response.ok({ message: `You joined channel ${channelName}.`, channel })
   }
 
   // Spracovanie prikazu invite
@@ -84,17 +84,17 @@ export default class ChannelsController {
 
     // Ziskanie kanala a uzivatela
     const channel = await Channel.findBy('channelName', channelName)
-    if (!channel) return response.notFound({ message: 'Kanál neexistuje.' })
+    if (!channel) return response.notFound({ message: 'Channel does not exist.' })
 
     const targetUser = await User.findBy('nickname', nickname)
-    if (!targetUser) return response.notFound({ message: 'Používateľ s týmto nickom neexistuje.' })
+    if (!targetUser) return response.notFound({ message: 'No user with this nickname exists.' })
 
     // Zistime, ci je dany uzivatel adminom
     const isCurrentUserAdmin = channel.adminId === currentUser.id
 
     // Skontrolovanie, ci je kanal sukromny
     if (channel.isPrivate && !isCurrentUserAdmin) {
-      return response.forbidden({ message: 'Do súkromného kanála môže pozývať iba správca.' })
+      return response.forbidden({ message: 'Only the admin can invite users to a private channel.' })
     }
 
     // Ak ide o verejny kanal, overime ci je dany uzivatel clenom kanala
@@ -105,7 +105,7 @@ export default class ChannelsController {
         .where('status', 'active')
         .first()
 
-      if (!isMember) return response.forbidden({ message: 'Nemáte oprávnenie pozývať do tohto kanála.' })
+      if (!isMember) return response.forbidden({ message: 'You are not allowed to invite users to this channel.' })
     }
 
     // Skontrolujeme, ci uzivatel sa uz v kanali nenachadza
@@ -116,7 +116,7 @@ export default class ChannelsController {
 
     if (targetMembership) {
       if (targetMembership.status === 'active') {
-        return response.badRequest({ message: 'Používateľ už je členom kanála.' })
+        return response.badRequest({ message: 'The user is already a member of the channel.' })
       }
       if (targetMembership.status === 'banned') {
         // Spravca moze zrusit ban
@@ -125,16 +125,16 @@ export default class ChannelsController {
           targetMembership.kickCount = 0
           await targetMembership.save()
           this.notifyInvited(channel, targetUser.id, currentUser.nickname)
-          return response.ok({ message: `Používateľovi ${nickname} bol zrušený ban a obnovený prístup.` })
+          return response.ok({ message: `${nickname} was unbanned and their access restored.` })
         }
-        return response.forbidden({ message: 'Tento používateľ má trvalý ban. Iba správca mu môže obnoviť prístup.' })
+        return response.forbidden({ message: 'This user is permanently banned. Only the admin can restore their access.' })
       }
       
       // Ak predtym opustil kanal, tak ho znovu aktivujeme
       targetMembership.status = 'active'
       await targetMembership.save()
       this.notifyInvited(channel, targetUser.id, currentUser.nickname)
-      return response.ok({ message: `Používateľ ${nickname} bol úspešne pozvaný späť do kanála.` })
+      return response.ok({ message: `${nickname} was invited back to the channel.` })
     }
 
     // Ak v kanali este nebol, vytvorime nove clenstvo
@@ -145,7 +145,7 @@ export default class ChannelsController {
     })
 
     this.notifyInvited(channel, targetUser.id, currentUser.nickname)
-    return response.ok({ message: `Používateľ ${nickname} bol pozvaný do kanála ${channelName}.` })
+    return response.ok({ message: `${nickname} was invited to channel ${channelName}.` })
   }
 
   // Oznamenie vsetkym v kanali, ze sa zmenil zoznam clenov (join, invite, kick, cancel)
@@ -173,19 +173,19 @@ export default class ChannelsController {
     const { channelName, nickname } = request.only(['channelName', 'nickname'])
 
     const channel = await Channel.findBy('channelName', channelName)
-    if (!channel) return response.notFound({ message: 'Kanál neexistuje.' })
+    if (!channel) return response.notFound({ message: 'Channel does not exist.' })
 
     if (!channel.isPrivate) {
-      return response.badRequest({ message: 'Príkaz /revoke je určený pre súkromné kanály. Vo verejnom kanáli použite /kick.' })
+      return response.badRequest({ message: '/revoke is for private channels. Use /kick in a public channel.' })
     }
     if (channel.adminId !== currentUser.id) {
-      return response.forbidden({ message: 'Odoberať používateľov zo súkromného kanála môže iba správca.' })
+      return response.forbidden({ message: 'Only the admin can remove users from a private channel.' })
     }
 
     const targetUser = await User.findBy('nickname', nickname)
-    if (!targetUser) return response.notFound({ message: 'Používateľ s týmto nickom neexistuje.' })
+    if (!targetUser) return response.notFound({ message: 'No user with this nickname exists.' })
     if (targetUser.id === currentUser.id) {
-      return response.badRequest({ message: 'Nemôžete odobrať seba samého. Na zrušenie kanála použite /quit.' })
+      return response.badRequest({ message: 'You cannot remove yourself. Use /quit to delete the channel.' })
     }
 
     const targetMembership = await ChannelUser.query()
@@ -194,7 +194,7 @@ export default class ChannelsController {
       .first()
 
     if (!targetMembership || targetMembership.status !== 'active') {
-      return response.badRequest({ message: 'Tento používateľ nie je aktívnym členom kanála.' })
+      return response.badRequest({ message: 'This user is not an active member of the channel.' })
     }
 
     // Nie je to ban - spravca ho moze kedykolvek znovu pozvat cez /invite
@@ -210,7 +210,7 @@ export default class ChannelsController {
     Ws.io?.in(userRoom).socketsLeave(`channel_${channel.id}`)
     this.notifyMembersChanged(channel.id)
 
-    return response.ok({ message: `Používateľ ${nickname} bol odobratý z kanála ${channelName}.` })
+    return response.ok({ message: `${nickname} was removed from channel ${channelName}.` })
   }
 
   // Spracovanie prikazu kick
@@ -219,14 +219,14 @@ export default class ChannelsController {
     const { channelName, nickname } = request.only(['channelName', 'nickname'])
 
     const channel = await Channel.findBy('channelName', channelName)
-    if (!channel) return response.notFound({ message: 'Kanál neexistuje.' })
+    if (!channel) return response.notFound({ message: 'Channel does not exist.' })
 
     const targetUser = await User.findBy('nickname', nickname)
-    if (!targetUser) return response.notFound({ message: 'Používateľ s týmto nickom neexistuje.' })
+    if (!targetUser) return response.notFound({ message: 'No user with this nickname exists.' })
 
     // Nemozeme vyhodit same seba ani spravcu kanala
-    if (targetUser.id === currentUser.id) return response.badRequest({ message: 'Nemôžete vyhodiť seba samého.' })
-    if (targetUser.id === channel.adminId) return response.forbidden({ message: 'Nemôžete vyhodiť správcu kanála.' })
+    if (targetUser.id === currentUser.id) return response.badRequest({ message: 'You cannot kick yourself.' })
+    if (targetUser.id === channel.adminId) return response.forbidden({ message: 'You cannot kick the channel admin.' })
 
     const isCurrentUserAdmin = channel.adminId === currentUser.id
     
@@ -238,8 +238,8 @@ export default class ChannelsController {
         .where('status', 'active')
         .first()
 
-      if (!currentMember) return response.forbidden({ message: 'Nie ste členom tohto kanála.' })
-      if (channel.isPrivate) return response.forbidden({ message: 'Iba správca môže vyhadzovať zo súkromného kanála.' })
+      if (!currentMember) return response.forbidden({ message: 'You are not a member of this channel.' })
+      if (channel.isPrivate) return response.forbidden({ message: 'Only the admin can kick users from a private channel.' })
     }
 
     // Zistenie stavu uzivatela, ktoreho chceme vyhodit
@@ -249,7 +249,7 @@ export default class ChannelsController {
       .first()
 
     if (!targetMembership || targetMembership.status !== 'active') {
-      return response.badRequest({ message: 'Tento používateľ nie je aktívnym členom kanála.' })
+      return response.badRequest({ message: 'This user is not an active member of the channel.' })
     }
 
     // Ak vyhadzuje spravca, tak ma okamzity ban
@@ -257,7 +257,7 @@ export default class ChannelsController {
       targetMembership.status = 'banned'
       await targetMembership.save()
       this.notifyBanned(channel, targetUser.id, currentUser.nickname)
-      return response.ok({ message: `Správca natrvalo vyhodil používateľa ${nickname} z kanála.` })
+      return response.ok({ message: `The admin permanently banned ${nickname} from the channel.` })
     }
 
     // Ak vyhadzuje bezny clen, spustime hlasovanie
@@ -267,11 +267,11 @@ export default class ChannelsController {
       targetMembership.status = 'banned'
       await targetMembership.save()
       this.notifyBanned(channel, targetUser.id, null)
-      return response.ok({ message: `Používateľ ${nickname} dostal 3 hlasy a má trvalý ban.` })
+      return response.ok({ message: `${nickname} received 3 votes and is permanently banned.` })
     }
 
     await targetMembership.save()
-    return response.ok({ message: `Hlasovali ste za vyhodenie. Používateľ ${nickname} má momentálne ${targetMembership.kickCount}/3 hlasov.` })
+    return response.ok({ message: `You voted to kick ${nickname}. They now have ${targetMembership.kickCount}/3 votes.` })
   }
 
   // Oznamenie vyhodenemu pouzivatelovi, aby mu kanal hned zmizol zo zoznamu
@@ -295,16 +295,16 @@ export default class ChannelsController {
     const { channelName } = request.only(['channelName'])
 
     const channel = await Channel.findBy('channelName', channelName)
-    if (!channel) return response.notFound({ message: 'Kanál neexistuje.' })
+    if (!channel) return response.notFound({ message: 'Channel does not exist.' })
 
     // Zrusit kanal moze iba spravca
     if (channel.adminId !== currentUser.id) {
-      return response.forbidden({ message: 'Kanál môže zrušiť iba jeho správca.' })
+      return response.forbidden({ message: 'Only the channel admin can delete the channel.' })
     }
 
     await this.deleteChannel(channel, currentUser.id)
 
-    return response.ok({ message: `Kanál ${channelName} bol úspešne zrušený a vymazaný.` })
+    return response.ok({ message: `Channel ${channelName} was deleted.` })
   }
 
   // Vymazanie kanala, vsetky spravy a clenstva sa vymazu automaticky vdaka ON DELETE CASCADE
@@ -325,13 +325,13 @@ export default class ChannelsController {
     const { channelName } = request.only(['channelName'])
 
     const channel = await Channel.findBy('channelName', channelName)
-    if (!channel) return response.notFound({ message: 'Kanál neexistuje.' })
+    if (!channel) return response.notFound({ message: 'Channel does not exist.' })
 
     // Ak kanal opusti spravca, kanal zanika
     if (channel.adminId === currentUser.id) {
       await this.deleteChannel(channel, currentUser.id)
       return response.ok({
-        message: `Opustili ste kanál ${channelName}. Keďže ste boli správca, kanál zanikol.`,
+        message: `You left channel ${channelName}. Since you were its admin, the channel was deleted.`,
         channelDeleted: true,
       })
     }
@@ -343,7 +343,7 @@ export default class ChannelsController {
       .first()
 
     if (!membership || membership.status !== 'active') {
-      return response.badRequest({ message: 'Nie ste aktívnym členom tohto kanála.' })
+      return response.badRequest({ message: 'You are not an active member of this channel.' })
     }
 
     // Zmenenie stavu uzivatela na lef
@@ -351,7 +351,7 @@ export default class ChannelsController {
     await membership.save()
     this.notifyMembersChanged(channel.id)
 
-    return response.ok({ message: `Úspešne ste opustili kanál ${channelName}.` })
+    return response.ok({ message: `You left channel ${channelName}.` })
   }
 
   // Ziskanie zoznamu vsetkych clenov v danom kanali
@@ -360,7 +360,7 @@ export default class ChannelsController {
     const channelName = request.param('name')
 
     const channel = await Channel.findBy('channelName', channelName)
-    if (!channel) return response.notFound({ message: 'Kanál neexistuje' })
+    if (!channel) return response.notFound({ message: 'Channel does not exist.' })
 
     // Zoznam clenov si moze pozriet iba aktivny clen kanala
     const isMember = await ChannelUser.query()
@@ -370,7 +370,7 @@ export default class ChannelsController {
       .first()
 
     if (!isMember) {
-      return response.forbidden({ message: 'Zoznam členov môže vidieť iba člen kanála.' })
+      return response.forbidden({ message: 'Only channel members can see the member list.' })
     }
 
     // Nacitanie vsetkych clenov kanala, ktory maju status active

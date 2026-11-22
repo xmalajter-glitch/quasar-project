@@ -38,10 +38,10 @@ const passwordRules = [
 const onSubmit = async () => {
   try {
     await authStore.login(email.value, password.value)
-    $q.notify({ type: 'positive', message: 'Úspešne prihlásený' })
+    $q.notify({ type: 'positive', message: t('login.success') })
     router.push({ name: 'home' })
   } catch (error) {
-    $q.notify({ type: 'negative', message: 'Nesprávny email alebo heslo' })
+    $q.notify({ type: 'negative', message: t('login.failed') })
   }
 }
 </script>

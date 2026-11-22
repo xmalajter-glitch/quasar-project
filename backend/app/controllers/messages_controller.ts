@@ -18,7 +18,7 @@ export default class MessagesController {
       .first()
 
     if (!isMember) {
-      return response.forbidden({ message: 'Nemáte prístup k správam tohto kanála.' })
+      return response.forbidden({ message: 'You do not have access to messages in this channel.' })
     }
 
     // Strankovanie pre infinite scroll: ?limit=30&before=<id najstarsej nacitanej spravy>
@@ -56,7 +56,7 @@ export default class MessagesController {
       .first()
 
     if (!isMember) {
-      return response.forbidden({ message: 'Nemôžete posielať správy do tohto kanála.' })
+      return response.forbidden({ message: 'You cannot send messages to this channel.' })
     }
 
     // Kontrola, ci sprava obsahuje mention

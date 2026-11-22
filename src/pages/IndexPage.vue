@@ -18,7 +18,7 @@
           v-if="!hasMore && !loadingInitial && messages.length > 0"
           class="text-center text-caption text-grey q-mb-sm"
         >
-          Začiatok histórie kanála
+          {{ $t('chat.historyStart') }}
         </div>
 
         <q-chat-message
@@ -38,15 +38,15 @@
       
       <!-- Informacie o tom kto prave pise do daneho chatu -->
       <div v-if="typingUser" class="text-caption q-mb-xs q-px-sm">
-        <q-icon name="edit" /> <em>{{ typingUser }} is typing...</em>
-        <span class="text-primary cursor-pointer q-ml-sm" @click="showLiveText = true">(Zobraziť live text)</span>
+        <q-icon name="edit" /> <em>{{ $t('chat.typing', { user: typingUser }) }}</em>
+        <span class="text-primary cursor-pointer q-ml-sm" @click="showLiveText = true">({{ $t('chat.showLive') }})</span>
       </div>
 
       <q-input
         v-model="newMessage"
         outlined
         dense
-        placeholder="Napíšte správu alebo použite príkaz (napr. /join, /kick, /quit, @nickname)..."
+        :placeholder="$t('chat.placeholder')"
         @keyup.enter="sendMessage"
         @update:model-value="simulateTyping"
       >
@@ -60,13 +60,13 @@
     <q-dialog v-model="showLiveText">
       <q-card style="min-width: 300px">
         <q-card-section>
-          <div class="text-h6">{{ typingUser }} práve píše:</div>
+          <div class="text-h6">{{ $t('chat.liveTitle', { user: typingUser }) }}</div>
         </q-card-section>
         <q-card-section class="q-pt-none text-italic text-grey-8">
           "Ahojte, neviete kedy je dnes..."
         </q-card-section>
         <q-card-actions align="right">
-          <q-btn flat label="Zavrieť" color="primary" v-close-popup />
+          <q-btn flat :label="$t('chat.close')" color="primary" v-close-popup />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -76,6 +76,7 @@
 <script setup>
 import { ref, onMounted, watch, onUnmounted, nextTick } from 'vue'
 import { useQuasar } from 'quasar'
+import { useI18n } from 'vue-i18n'
 import { store, removeChannel, joinChannel } from '../store.js'
 import { api } from '../boot/axios'
 import { useAuthStore } from '../stores/auth'
@@ -83,6 +84,7 @@ import { socket } from '../socket.js'
 
 const authStore = useAuthStore()
 const $q = useQuasar()
+const { t } = useI18n()
 
 const newMessage = ref('')
 const typingUser = ref('')
@@ -103,7 +105,7 @@ function mapMessage(msg) {
     id: msg.id,
     userId: msg.userId ?? msg.user_id,
     channelId: msg.channelId ?? msg.channel_id,
-    sender: msg.user?.nickname || 'Unknown',
+    sender: msg.user?.nickname || t('chat.unknownSender'),
     text: content,
     time: created
       ? new Date(created).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -212,7 +214,7 @@ function joinAllChannels() {
 }
 
 function onNewMessage(raw) {
-  console.log('new:message prišlo', raw, 'aktuálny kanál:', store.currentChannel?.id)
+  console.log('new:message received', raw, 'current channel:', store.currentChannel?.id)
 
   const msg = mapMessage(raw)
 
@@ -252,7 +254,7 @@ async function sendMessage() {
   }
 
   if (!store.currentChannel?.id) {
-    $q.notify({ type: 'negative', message: 'Vyberte si kanál na posielanie správ.' })
+    $q.notify({ type: 'negative', message: t('chat.selectChannel') })
     return
   }
 
@@ -265,7 +267,7 @@ async function sendMessage() {
     addMessage(mapMessage(response.data))
   } catch (error) {
     console.error('Failed to send message:', error)
-    $q.notify({ type: 'negative', message: 'Správu sa nepodarilo odoslať.' })
+    $q.notify({ type: 'negative', message: t('chat.sendFailed') })
   }
 }
 
@@ -277,9 +279,9 @@ async function handleCommand(cmdText) {
   try {
     switch (command) {
       case '/join': {
-        if (!targetName) throw new Error('Chýba názov kanála')
+        if (!targetName) throw new Error(t('chat.errors.missingChannelName'))
         if (args[2] && args[2] !== 'private') {
-          throw new Error('Použitie: /join channelName [private]')
+          throw new Error(t('chat.errors.joinUsage'))
         }
         const message = await joinChannel(targetName, args[2] === 'private')
         $q.notify({ type: 'positive', message })
@@ -288,38 +290,38 @@ async function handleCommand(cmdText) {
       case '/cancel':
       case '/quit': {
         const channelName = store.currentChannel?.name
-        if (!channelName) throw new Error('Nie je vybraný žiadny kanál')
+        if (!channelName) throw new Error(t('chat.errors.noChannel'))
         const response = await api.post(`/channels/${command === '/quit' ? 'quit' : 'cancel'}`, {
           channelName,
         })
         removeChannel((c) => c.name === channelName)
-        $q.notify({ type: 'warning', message: response.data?.message || 'Opustili ste kanál.' })
+        $q.notify({ type: 'warning', message: response.data?.message || t('chat.left') })
         break
       }
       case '/list':
-        if (!store.currentChannel?.name) throw new Error('Nie je vybraný žiadny kanál')
+        if (!store.currentChannel?.name) throw new Error(t('chat.errors.noChannel'))
         store.ui.rightDrawerOpen = true
         store.ui.membersRefresh++
         break
       case '/kick':
       case '/revoke':
       case '/invite': {
-        if (!targetName) throw new Error('Chýba nick používateľa')
+        if (!targetName) throw new Error(t('chat.errors.missingNick'))
         const response = await api.post(`/channels/${command.slice(1)}`, {
           channelName: store.currentChannel.name,
           nickname: targetName,
         })
         store.ui.membersRefresh++ // zoznam clenov sa zmenil
-        $q.notify({ type: 'positive', message: response.data?.message || 'Príkaz vykonaný.' })
+        $q.notify({ type: 'positive', message: response.data?.message || t('chat.commandDone') })
         break
       }
       default:
-        $q.notify({ type: 'negative', message: `Neznámy príkaz: ${command}` })
+        $q.notify({ type: 'negative', message: t('chat.errors.unknownCommand', { command }) })
     }
   } catch (err) {
     $q.notify({
       type: 'negative',
-      message: err.response?.data?.message || err.message || 'Chyba pri vykonávaní príkazu',
+      message: err.response?.data?.message || err.message || t('chat.errors.commandFailed'),
     })
   }
 }
