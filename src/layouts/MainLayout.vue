@@ -263,7 +263,9 @@ onMounted(async () => {
   socket.on('channel:deleted', onChannelDeleted)
   if (socket.connected) identify()
 
+  // Spojenie sa otvara az po prihlaseni (token sa posiela v handshake)
   try {
+  else socket.connect()
     const response = await api.get('/channels')
     store.channels = response.data.map(ch => ({
       id: ch.id,

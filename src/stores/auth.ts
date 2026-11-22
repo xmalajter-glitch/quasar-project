@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { api } from '../boot/axios'
+import { socket } from '../socket.js'
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -45,6 +46,8 @@ export const useAuthStore = defineStore('auth', {
         }
       } finally {
         this.clearSession()
+        // Spojenie patri odhlasenemu pouzivatelovi - dalsi sa pripoji s vlastnym tokenom
+        socket.disconnect()
       }
     },
   },
