@@ -17,7 +17,7 @@ export default class AccessTokensController {
   }
 
   async destroy({ auth }: HttpContext) {
-    const user = auth.getUserOrFail()
+    const user = auth.use('api').getUserOrFail()
     if (user.currentAccessToken) {
       await User.accessTokens.delete(user, user.currentAccessToken.identifier)
     }
