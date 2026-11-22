@@ -23,6 +23,8 @@ export default {
     submit: 'Vytvoriť účet',
   },
 
+    failed: 'Registrácia zlyhala',
+    success: 'Registrácia bola úspešná',
   validation: {
     required: 'Toto pole je povinné',
     email: 'Zadajte platnú emailovú adresu',
@@ -33,6 +35,8 @@ export default {
     nicknameRequired: 'Prezývka je povinná',
     passwordRequired: 'Heslo je povinné',
     passwordMin: 'Heslo musí mať aspoň 8 znakov',
+    nicknameLength: 'Prezývka musí mať 2 – 32 znakov',
+    nicknameFormat: 'Prezývka môže obsahovať iba písmená bez diakritiky, číslice a podčiarkovník',
     passwordNumber: 'Heslo musí obsahovať aspoň jedno číslo',
     passwordSpecial: 'Heslo musí obsahovať aspoň jeden špeciálny znak',
     passwordMatch: 'Heslá sa nezhodujú',

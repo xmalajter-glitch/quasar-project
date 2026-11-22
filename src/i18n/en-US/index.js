@@ -24,6 +24,8 @@ export default {
     submit: 'Create account',
   },
 
+    failed: 'Registration failed',
+    success: 'Registration successful',
   validation: {
     required: 'This field is required',
     email: 'Please enter a valid email address',
@@ -34,6 +36,8 @@ export default {
     nicknameRequired: 'Nickname is required',
     passwordRequired: 'Password is required',
     passwordMin: 'Password must be at least 8 characters',
+    nicknameLength: 'Nickname must be 2–32 characters long',
+    nicknameFormat: 'Nickname may only contain letters (no diacritics), digits and underscores',
     passwordNumber: 'Password must contain at least one number',
     passwordSpecial: 'Password must contain at least one special character',
     passwordMatch: "Passwords don't match",

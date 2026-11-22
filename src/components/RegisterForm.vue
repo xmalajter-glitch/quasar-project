@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuasar } from 'quasar'
@@ -27,8 +27,11 @@ const firstNameRules = [
 const lastNameRules = [
   (val) => !!val || t('validation.lastNameRequired'),
 ]
+// Rovnake pravidla ako na backende (backend/app/validators/user.ts)
 const nicknameRules = [
   (val) => !!val || t('validation.nicknameRequired'),
+  (val) => !val || (val.length >= 2 && val.length <= 32) || t('validation.nicknameLength'),
+  (val) => !val || /^[a-zA-Z0-9_]+$/.test(val) || t('validation.nicknameFormat'),
 ]
 
 const emailRules = [
@@ -56,9 +59,32 @@ const passwordMatch = [
     val === password.value || t('validation.passwordMatch'),
 ]
 
+// Chyby z backendu (422) pre jednotlive polia, napr. obsadeny nickname alebo email
+const serverErrors = ref({})
+const serverFieldMap = {
+  name: 'firstName',
+  surname: 'lastName',
+  nickname: 'nickname',
+  email: 'email',
+  password: 'password',
+  passwordConfirmation: 'passwordConfirm',
+}
+
+// Po uprave pola jeho chybu zo servera zmazeme
+const fields = { firstName, lastName, nickname, email, password, passwordConfirm }
+Object.entries(fields).forEach(([key, field]) => {
+  watch(field, () => {
+    if (serverErrors.value[key]) delete serverErrors.value[key]
+  })
+})
+
+// undefined = pouziju sa lokalne :rules, inak sa zobrazi chyba zo servera
+const fieldError = (key) => (serverErrors.value[key] ? true : undefined)
+
 const onSubmit = async () => {
   if (isLoading.value) return
   isLoading.value = true
+  serverErrors.value = {}
 
   try {
     await authStore.register({
@@ -66,14 +92,27 @@ const onSubmit = async () => {
       surname: lastName.value,
       nickname: nickname.value,
       email: email.value,
-      password: password.value
+      password: password.value,
+      passwordConfirmation: passwordConfirm.value,
     })
     
-    $q.notify({ type: 'positive', message: 'Registrácia bola úspešná' })
+    $q.notify({ type: 'positive', message: t('register.success') })
     router.push({ name: 'home' })
   } catch (error) {
-    const errorMsg = error.response?.data?.message || error.response?.data?.[0]?.message || 'Chyba pri registrácii'
-    $q.notify({ type: 'negative', message: errorMsg })
+    const fieldErrors = error.response?.data?.errors
+    if (error.response?.status === 422 && Array.isArray(fieldErrors)) {
+      const mapped = {}
+      for (const e of fieldErrors) {
+        const key = serverFieldMap[e.field]
+        if (key && !mapped[key]) mapped[key] = e.message
+      }
+      serverErrors.value = mapped
+    } else {
+      $q.notify({
+        type: 'negative',
+        message: error.response?.data?.message || t('register.failed'),
+      })
+    }
   } finally {
     isLoading.value = false
   }
@@ -95,6 +134,8 @@ const onSubmit = async () => {
       type="text"
       :label="t('register.firstName')"
       :rules="firstNameRules"
+      :error="fieldError('firstName')"
+      :error-message="serverErrors.firstName"
       lazy-rules
       autocomplete="given-name"
       hide-bottom-space
@@ -106,6 +147,8 @@ const onSubmit = async () => {
       type="text"
       :label="t('register.lastName')"
       :rules="lastNameRules"
+      :error="fieldError('lastName')"
+      :error-message="serverErrors.lastName"
       lazy-rules
       autocomplete="family-name"
       hide-bottom-space
@@ -117,6 +160,8 @@ const onSubmit = async () => {
       type="text"
       :label="t('register.nickname')"
       :rules="nicknameRules"
+      :error="fieldError('nickname')"
+      :error-message="serverErrors.nickname"
       lazy-rules
       autocomplete="nickname"
       hide-bottom-space
@@ -128,6 +173,8 @@ const onSubmit = async () => {
       type="email"
       :label="t('register.email')"
       :rules="emailRules"
+      :error="fieldError('email')"
+      :error-message="serverErrors.email"
       lazy-rules
       autocomplete="email"
       hide-bottom-space
@@ -138,6 +185,8 @@ const onSubmit = async () => {
       outlined
       :label="t('register.password')"
       :rules="passwordRules"
+      :error="fieldError('password')"
+      :error-message="serverErrors.password"
       lazy-rules
       :type="showPassword ? 'text' : 'password'"
       hide-bottom-space
@@ -158,6 +207,8 @@ const onSubmit = async () => {
       :label="t('register.confirmPassword')"
       :type="showPasswordConfirm ? 'text' : 'password'"
       :rules="passwordMatch"
+      :error="fieldError('passwordConfirm')"
+      :error-message="serverErrors.passwordConfirm"
       lazy-rules
       hide-bottom-space
       autocomplete="new-password"
