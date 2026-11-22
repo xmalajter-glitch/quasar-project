@@ -151,6 +151,19 @@ export interface Registry {
       rawResponse: ExtractRawResponse<Awaited<ReturnType<import('#controllers/channels_controller').default['cancel']>>>
     }
   }
+  'channels.channels.acknowledge_invite': {
+    methods: ["POST"]
+    pattern: '/api/v1/channels/:channel_id/invite/seen'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { channel_id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/channels_controller').default['acknowledgeInvite']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/channels_controller').default['acknowledgeInvite']>>>
+      rawResponse: ExtractRawResponse<Awaited<ReturnType<import('#controllers/channels_controller').default['acknowledgeInvite']>>>
+    }
+  }
   'channels.messages.index': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/channels/:channel_id/messages'

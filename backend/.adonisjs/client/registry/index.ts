@@ -74,6 +74,12 @@ const routes = {
     tokens: [[0,"api"],[0,"v1"],[0,"channels"],[0,"cancel"]],
     types: placeholder as Registry['channels.channels.cancel']['types'],
   },
+  'channels.channels.acknowledge_invite': {
+    methods: ["POST"],
+    pattern: '/api/v1/channels/:channel_id/invite/seen',
+    tokens: [[0,"api"],[0,"v1"],[0,"channels"],[1,"channel_id"],[0,"invite"],[0,"seen"]],
+    types: placeholder as Registry['channels.channels.acknowledge_invite']['types'],
+  },
   'channels.messages.index': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/channels/:channel_id/messages',

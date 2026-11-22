@@ -27,6 +27,7 @@ export interface ApiDefinition {
       kick: typeof routes['channels.channels.kick']
       quit: typeof routes['channels.channels.quit']
       cancel: typeof routes['channels.channels.cancel']
+      acknowledgeInvite: typeof routes['channels.channels.acknowledge_invite']
       channelUsers: typeof routes['channels.channels.channel_users']
     }
     messages: {

@@ -20,6 +20,10 @@ export default class ChannelUser extends BaseModel {
   @column()
   declare kickCount: number
 
+  // Neprecitana pozvanka do kanala
+  @column()
+  declare invited: boolean
+
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
 

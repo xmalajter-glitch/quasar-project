@@ -274,7 +274,7 @@ onMounted(async () => {
       name: ch.channelName,
       type: ch.isPrivate ? 'private' : 'public',
       adminId: ch.adminId,
-      isInvited: false
+      isInvited: Boolean(ch.isInvited) // neprecitana pozvanka prezije reload
     }))
 
     if (store.channels.length > 0 && !store.currentChannel?.name) {
@@ -339,8 +339,15 @@ async function loadChannelUsers(channelName) {
 }
 
 function selectChannel(channel) {
-  channel.isInvited = false // otvorenim kanala sa zvyraznenie pozvanky zrusi
   store.currentChannel = channel
+
+  // Otvorenim kanala sa zvyraznenie pozvanky zrusi (aj na serveri, aby nepretrvalo po reloade)
+  if (channel.isInvited) {
+    channel.isInvited = false
+    api.post(`/channels/${channel.id}/invite/seen`).catch((error) => {
+      console.error('Failed to mark the invite as seen:', error)
+    })
+  }
 }
 
 // Opustenie kanala

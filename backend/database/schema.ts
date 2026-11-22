@@ -33,7 +33,7 @@ export class AuthAccessTokenSchema extends BaseModel {
 }
 
 export class ChannelUserSchema extends BaseModel {
-  static $columns = ['channelId', 'createdAt', 'id', 'kickCount', 'status', 'updatedAt', 'userId'] as const
+  static $columns = ['channelId', 'createdAt', 'id', 'invited', 'kickCount', 'status', 'updatedAt', 'userId'] as const
   $columns = ChannelUserSchema.$columns
   @column()
   declare channelId: number | null
@@ -41,6 +41,8 @@ export class ChannelUserSchema extends BaseModel {
   declare createdAt: DateTime
   @column({ isPrimary: true })
   declare id: number
+  @column()
+  declare invited: boolean
   @column()
   declare kickCount: number | null
   @column()

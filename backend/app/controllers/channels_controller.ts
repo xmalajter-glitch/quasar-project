@@ -15,7 +15,13 @@ export default class ChannelsController {
       query.wherePivot('status', 'active')
     })
 
-    return response.ok(user.channels)
+    // isInvited = neprecitana pozvanka, kanal ostava zvyrazneny aj po reloade
+    return response.ok(
+      user.channels.map((channel) => ({
+        ...channel.serialize(),
+        isInvited: Boolean(channel.$extras.pivot_invited),
+      }))
+    )
   }
 
   // Spracovanie prikazu join
@@ -63,6 +69,7 @@ export default class ChannelsController {
       
       // Ak v kanali bol a opustil ho zmenime status z left na active
       existingMembership.status = 'active'
+      existingMembership.invited = false // pripojil sa sam, nie je co zvyraznovat
       await existingMembership.save()
       this.notifyMembersChanged(channel.id)
       return response.ok({ message: `You rejoined channel ${channelName}.`, channel })
@@ -123,6 +130,7 @@ export default class ChannelsController {
         if (isCurrentUserAdmin) {
           targetMembership.status = 'active'
           targetMembership.kickCount = 0
+          targetMembership.invited = true
           await targetMembership.save()
           this.notifyInvited(channel, targetUser.id, currentUser.nickname)
           return response.ok({ message: `${nickname} was unbanned and their access restored.` })
@@ -132,6 +140,7 @@ export default class ChannelsController {
       
       // Ak predtym opustil kanal, tak ho znovu aktivujeme
       targetMembership.status = 'active'
+      targetMembership.invited = true
       await targetMembership.save()
       this.notifyInvited(channel, targetUser.id, currentUser.nickname)
       return response.ok({ message: `${nickname} was invited back to the channel.` })
@@ -141,7 +150,8 @@ export default class ChannelsController {
     await ChannelUser.create({
       channelId: channel.id,
       userId: targetUser.id,
-      status: 'active'
+      status: 'active',
+      invited: true,
     })
 
     this.notifyInvited(channel, targetUser.id, currentUser.nickname)
@@ -352,6 +362,18 @@ export default class ChannelsController {
     this.notifyMembersChanged(channel.id)
 
     return response.ok({ message: `You left channel ${channelName}.` })
+  }
+
+  // Pouzivatel otvoril kanal, do ktoreho bol pozvany -> zvyraznenie pozvanky sa zrusi
+  async acknowledgeInvite({ params, auth, response }: HttpContext) {
+    const currentUser = auth.use('api').user!
+
+    await ChannelUser.query()
+      .where('channelId', params.channel_id)
+      .where('userId', currentUser.id)
+      .update({ invited: false })
+
+    return response.noContent()
   }
 
   // Ziskanie zoznamu vsetkych clenov v danom kanali

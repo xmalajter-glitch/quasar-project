@@ -56,6 +56,7 @@ router
         router.post('/cancel', [ChannelsController, 'cancel'])
 
         // Cesty pre správy (využívajú dynamický parameter :channel_id)
+        router.post('/:channel_id/invite/seen', [ChannelsController, 'acknowledgeInvite'])
         router.get('/:channel_id/messages', [MessagesController, 'index'])
         router.post('/:channel_id/messages', [MessagesController, 'store'])
         router.get('/:name/users', [ChannelsController, 'channelUsers'])

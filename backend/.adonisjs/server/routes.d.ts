@@ -15,6 +15,7 @@ export type ScannedRoutes = {
     'channels.channels.kick': { paramsTuple?: []; params?: {} }
     'channels.channels.quit': { paramsTuple?: []; params?: {} }
     'channels.channels.cancel': { paramsTuple?: []; params?: {} }
+    'channels.channels.acknowledge_invite': { paramsTuple: [ParamValue]; params: {'channel_id': ParamValue} }
     'channels.messages.index': { paramsTuple: [ParamValue]; params: {'channel_id': ParamValue} }
     'channels.messages.store': { paramsTuple: [ParamValue]; params: {'channel_id': ParamValue} }
     'channels.channels.channel_users': { paramsTuple: [ParamValue]; params: {'name': ParamValue} }
@@ -41,6 +42,7 @@ export type ScannedRoutes = {
     'channels.channels.kick': { paramsTuple?: []; params?: {} }
     'channels.channels.quit': { paramsTuple?: []; params?: {} }
     'channels.channels.cancel': { paramsTuple?: []; params?: {} }
+    'channels.channels.acknowledge_invite': { paramsTuple: [ParamValue]; params: {'channel_id': ParamValue} }
     'channels.messages.store': { paramsTuple: [ParamValue]; params: {'channel_id': ParamValue} }
   }
 }
