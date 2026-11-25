@@ -35,11 +35,20 @@
 
     <!-- Fixny riadok na pisanie -->
     <div class="q-pa-sm border-top">
-      
       <!-- Informacie o tom kto prave pise do daneho chatu -->
-      <div v-if="typingUser" class="text-caption q-mb-xs q-px-sm">
-        <q-icon name="edit" /> <em>{{ $t('chat.typing', { user: typingUser }) }}</em>
-        <span class="text-primary cursor-pointer q-ml-sm" @click="showLiveText = true">({{ $t('chat.showLive') }})</span>
+      <div v-if="Object.keys(typingUsers).length > 0" class="text-caption q-mb-xs q-px-sm text-grey-8">
+        <q-icon name="edit" class="q-mr-xs" />
+        <span v-for="(data, nick, index) in typingUsers" :key="nick">
+          <span
+            class="text-primary text-weight-medium cursor-pointer"
+            style="text-decoration: underline;"
+            @click="openLiveText(nick)"
+          >
+            {{ nick }}
+          </span>
+          <span v-if="index < Object.keys(typingUsers).length - 1">, </span>
+        </span>
+        <em> is typing...</em>
       </div>
 
       <q-input
@@ -58,12 +67,17 @@
 
     <!-- Dialog pre zive sledovanie rozpisaneho textu -->
     <q-dialog v-model="showLiveText">
-      <q-card style="min-width: 300px">
+      <q-card style="min-width: 320px">
         <q-card-section>
-          <div class="text-h6">{{ $t('chat.liveTitle', { user: typingUser }) }}</div>
+          <div class="text-h6">{{ $t('chat.liveTitle', { user: selectedTypingUser }) }}</div>
         </q-card-section>
-        <q-card-section class="q-pt-none text-italic text-grey-8">
-          "Ahojte, neviete kedy je dnes..."
+        <q-card-section class="q-pt-none text-italic text-grey-8" style="word-break: break-word;">
+          <span v-if="typingUsers[selectedTypingUser]">
+            "{{ typingUsers[selectedTypingUser].text }}"
+          </span>
+          <span v-else class="text-grey-5">
+            Používateľ prestal písať alebo správu odoslal.
+          </span>
         </q-card-section>
         <q-card-actions align="right">
           <q-btn flat :label="$t('chat.close')" color="primary" v-close-popup />
@@ -87,9 +101,22 @@ const $q = useQuasar()
 const { t } = useI18n()
 
 const newMessage = ref('')
-const typingUser = ref('')
+const typingUsers = ref({}) // { [nickname]: { text, timer } }
+const selectedTypingUser = ref(null)
 const showLiveText = ref(false)
 const messages = ref([])
+
+function openLiveText(nick) {
+  selectedTypingUser.value = nick
+  showLiveText.value = true
+}
+
+function clearAllTypingUsers() {
+  Object.values(typingUsers.value).forEach((entry) => {
+    if (entry?.timer) clearTimeout(entry.timer)
+  })
+  typingUsers.value = {}
+}
 
 // Pomocne funkcie pre nickname
 function isMentionOfMe(content) {
@@ -122,14 +149,14 @@ function addMessage(msg) {
 
 // Systemove notifikacie
 function maybeNotify(msg) {
-  if (msg.userId === authStore.user?.id) return       
-  if (store.currentUser.status !== 'online') return   
+  if (msg.userId === authStore.user?.id) return
+  if (store.currentUser.status !== 'online') return
   if (store.settings.notifyOnlyMentions && !msg.isMention) return
 
   const preview = msg.text.length > 60 ? msg.text.slice(0, 60) + '…' : msg.text
 
   if ($q.appVisible) {
-    // notifikacie v apke pre kanal, iny nez otovreny
+    // notifikacie v apke pre kanal, iny nez otvoreny
     if (Number(msg.channelId) !== Number(store.currentChannel?.id)) {
       $q.notify({
         message: msg.sender,
@@ -143,7 +170,7 @@ function maybeNotify(msg) {
     return
   }
 
-  // Ak app nieje visible, posle sa systemova notifikacia
+  // Ak app nie je visible, posle sa systemova notifikacia
   if ('Notification' in window && Notification.permission === 'granted') {
     const n = new Notification(msg.sender, { body: preview })
     n.onclick = () => window.focus()
@@ -224,23 +251,61 @@ function onNewMessage(raw) {
   maybeNotify(msg)
 }
 
+function onTypingUpdate(data) {
+  if (Number(data.channelId) !== Number(store.currentChannel?.id)) return
+  if (!data.nickname || data.nickname === authStore.user?.nickname) return
+
+  if (typingUsers.value[data.nickname]?.timer) {
+    clearTimeout(typingUsers.value[data.nickname].timer)
+  }
+
+  if (!data.text || !data.text.trim()) {
+    delete typingUsers.value[data.nickname]
+    return
+  }
+
+  const timer = setTimeout(() => {
+    delete typingUsers.value[data.nickname]
+  }, 3000)
+
+  typingUsers.value[data.nickname] = {
+    text: data.text,
+    timer,
+  }
+}
+
 onMounted(() => {
   fetchMessages()
   socket.on('new:message', onNewMessage)
+  socket.on('typing:update', onTypingUpdate)
   socket.on('connect', joinAllChannels)
   if (socket.connected) joinAllChannels()
 })
 
 onUnmounted(() => {
   socket.off('new:message', onNewMessage)
+  socket.off('typing:update', onTypingUpdate)
   socket.off('connect', joinAllChannels)
+  clearAllTypingUsers()
 })
 
 // Menenie kanalov po pridani
 watch(() => store.channels.map((c) => c.id), joinAllChannels, { immediate: true })
 
 // Zmena kanala
-watch(() => store.currentChannel?.id, fetchMessages)
+watch(() => store.currentChannel?.id, (newId, oldId) => {
+  if (oldId && authStore.user?.nickname) {
+    socket.emit('typing:update', {
+      channelId: oldId,
+      nickname: authStore.user.nickname,
+      text: '',
+    })
+  }
+  clearAllTypingUsers()
+  showLiveText.value = false
+  selectedTypingUser.value = null
+  fetchMessages()
+})
 
 // Odosielanie
 async function sendMessage() {
@@ -250,6 +315,7 @@ async function sendMessage() {
   if (text.startsWith('/')) {
     await handleCommand(text)
     newMessage.value = ''
+    simulateTyping('')
     return
   }
 
@@ -263,6 +329,7 @@ async function sendMessage() {
       content: text,
     })
     newMessage.value = ''
+    simulateTyping('')
     // správa príde aj cez socket, addMessage deduplikuje podľa id
     addMessage(mapMessage(response.data))
   } catch (error) {
@@ -326,8 +393,16 @@ async function handleCommand(cmdText) {
   }
 }
 
-function simulateTyping() {
-  // neskôr WebSocket eventy
+function simulateTyping(val) {
+  if (!store.currentChannel?.id || !authStore.user?.nickname) return
+
+  const textToSend = val && val.startsWith('/') ? '' : (val || '')
+
+  socket.emit('typing:update', {
+    channelId: store.currentChannel.id,
+    nickname: authStore.user.nickname,
+    text: textToSend,
+  })
 }
 
 function scrollToBottom() {

@@ -77,6 +77,25 @@ Ws.io?.on('connection', (socket) => {
     socket.leave(`channel_${channelId}`)
   })
 
+  // Živé písanie a náhľad rozpísaného textu (iba pre členov v danej miestnosti)
+  socket.on('typing:update', (payload) => {
+    const id = Number(payload?.channelId)
+    if (!Number.isInteger(id)) return
+
+    // Overíme, že je socket naozaj pripojený v tomto kanáli
+    if (!socket.rooms.has(`channel_${id}`)) return
+
+    const text = typeof payload?.text === 'string' ? payload.text : ''
+    const nickname = typeof payload?.nickname === 'string' ? payload.nickname : ''
+
+    socket.to(`channel_${id}`).emit('typing:update', {
+      channelId: id,
+      userId,
+      nickname,
+      text,
+    })
+  })
+
   socket.on('disconnect', () => {
     const left = (connections.get(userId) ?? 1) - 1
     if (left <= 0) {
